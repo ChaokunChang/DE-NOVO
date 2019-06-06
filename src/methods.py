@@ -19,20 +19,15 @@ class DBG():
         print("Initializing...")
 
     def load_data(self,data_dir='../data/data1',file_type='short'):
-        filenames = 
+        filenames = os.listdir(data_dir)
         for fid,fname in enumerate(filenames):
-            if filenames.split('_','.')[0] != file_type:
+            file_prefix = fname.split('.')[0].split('_')[0]
+            if file_prefix != file_type:
                 continue
             file_path = opj(data_dir,fname)
             reads = SeqIO.parse(file_path,'fasta')
+            self.build_graph(reads)
 
-
-
-
-
-if __name__=="__main__":
-    dbg = DBG()
-    print("Test Done.")
-    
-    lst = [1,2,3,4]
-    print(lst)
+    def build_graph(self, reads_gen):
+        assert(isinstance(reads_gen,generator)
+        for read in reads_gen:
