@@ -8,67 +8,17 @@ from matplotlib import pyplot as plt
 from collections import defaultdict
 from Bio import Seq, SeqIO, SeqRecord
 from itertools import chain
-
-bases = "ATCG" # base pair: A-T C-G
-
-def parse_args():
-    """
-    Parses command line arguments.
-    """
-    parser = argparse.ArgumentParser('DNA Concantatente')
-    model_settings = parser.add_argument_group('model seetting')
-    model_settings.add_argument('--model', choices=['DBG'], default='DBG',
-                                help='choose the algorithm to use')
-    model_settings.add_argument('--mode',default="default")
-    DBG_settings = parser.add_argument_group('DBG model settings')
-    DBG_settings.add_argument('--k', type=int, default=50,
-                                help='the kmers-k')
-    DBG_settings.add_argument('--step', type=int, default=1,
-                                help='step between adjacent kmer.')
-    DBG_settings.add_argument('--limit', type=int, default=1,
-                                help='min num of the words in count dict.')
-    DBG_settings.add_argument('--top', type=int, default=0,
-                                help='min num of the words in count dict.')
-
-    path_settings = parser.add_argument_group('dir settings')
-    path_settings.add_argument('--data_dir', default='../data/data1',
-                               help='the data source dir.')
-    path_settings.add_argument('--file_type', choices=['short','long'], default='short',
-                               help='short or long file.')
-    path_settings.add_argument('--result_dir', default='./',
-                               help='the data source dir.')
-    return parser.parse_args()
-    
-
-def twin(kmer):
-    return Seq.reverse_complement(kmer)
-
-def front_seq(kmer):
-    for x in bases:
-        yield kmer[1:]+x
-
-def back_seq(kmer):
-    for x in bases:
-        yield x + kmer[:-1]
-
-def step_front(kmer,base):
-    return kmer[1:] + base
-
-def step_back(base,kmer):
-    return base + kmer[:-1]
-
-def contig2str(contig):
-    return contig[0] + "".join(x[-1] for x in contig[1:])
-
+from utils import *
+# from DNA.src.utils import *
 class DBG():
     """ The DBG Algorithm to implement the de novo problem. """
-    def __init__(self,k=31,step=1,limit=1,mode="default"):
+    def __init__(self,k=31,step=1,limit=1):
         print("Initializing...")
         self.k = k
         self.step = step
         self.limit = limit
         self.count_dict = None
-        self.results = None
+        self.nodes = None
         self.graph = None
 
     def load_data(self,data_dir='../data/data1',file_type='short'):
@@ -99,21 +49,22 @@ class DBG():
                 seq = twin(seq)
                 for i in range(len(seq)-k +1):
                     count_dict[seq[i:i+k]] += 1
-        print("The kmers which count is less than limit({}) will be remove from dict.".format(self.limit))
-        # count_dict = [x for x in count_dict if count_dict[x] > self.limit ]
-        del_ele = [x for x in count_dict if count_dict[x] <= self.limit]
-        for x in del_ele:
+        print("The low frequency kmers (limited up to {}) will be remove from dict.".format(self.limit))
+        low_freq_kmers = [x for x in count_dict if count_dict[x] <= self.limit]
+        for x in low_freq_kmers:
             del count_dict[x]
         
         return count_dict
 
     def get_forward_contig(self,kmer):
+        """ This function expand every kmer to a forward contig, which every kmer of each contig
+            must be 1-in-1-out kmer, and there will be no possible circle or mobius or hairpins
+            Causion: We must ensure that k is big enough to avoid the duplicate occurance of a kmer
+        """
         contig = [kmer]
         while True:
-            # if sum((step_front(contig[-1],base) in self.count_dict) for base in bases ) != 1:
             if sum( x in self.count_dict for x in front_seq(contig[-1]) ) != 1:
                 break # continue when exits only
-            # next_kmers = [step_front(contig[-1],base) for base in bases if step_front(contig[-1],base) in self.count_dict]
             next_kmers = [x for x in front_seq(contig[-1]) if x in self.count_dict]
             next_kmer = next_kmers[0]
 
@@ -121,40 +72,59 @@ class DBG():
                 break # break out when meat circle and mobius contig
             if next_kmer == twin(contig[-1]):
                 break # break out when meat hairpins
-            # if sum(step_back(base,next_kmer) in self.count_dict for base in bases ) != 1:
             if sum(x in self.count_dict for x in back_seq(next_kmer)) != 1:
                 break # continue when exits only
             contig.append(next_kmer)
         return contig
 
     def get_contig(self,kmer):
+        """ 
+        The contig(expanded kmer) can not form circle itself, so if the fc's(forward_contig) next is kmer, 
+        The the bc'next must be twin(kmer), and can form same circle,
+        So, the final contig = fc in this case
+        While, if kmer is not the next of fc, then we must add the reversed bc before it.
+         """
         forward_contig = self.get_forward_contig(kmer)
         backword_contig = self.get_forward_contig(twin(kmer))
+        contig = forward_contig
         # if kmer[:-1] == forward_contig[-1][1:]:
-        if kmer in front_seq(forward_contig[-1]):
-            # The kmer is the forward_contig's next contig, means that the while loop
-            # break out at the second one(meat circle).
-            # The then contig only contain the forward one, add backword one will caused circle.
-            contig = forward_contig
-        else:
-            # There won't form circle, so we must add the backword contig, however,
-            # we must reverse the backword contig before.
+        if kmer not in front_seq(forward_contig[-1]):
             revers_back_contig = [twin(x) for x in backword_contig[-1:0:-1]] # the first one is ignored to avoid circle.
-            contig = revers_back_contig + forward_contig
+            contig = revers_back_contig + contig
         return contig
 
-    def get_contigs(self):
+    def compress_path(self):
+        """ Compress the path in graph(Though the graph is not generated till now).
+        All contigs in graph will be compressed preliminary(maybe we will compress it later.), 
+        each new contig(compressed contigs) if formed by 1-in-1-out contigs,
+        and each new_contig's head and tail is not 1-in-1-out.
+        The new contigs can be seen as new reads
+        It seems that we must consider the new contigs relationship with original reads.
+         """
         visited = set()
-        self.results = []
+        self.nodes = []
         for kmer in self.count_dict:
             if kmer not in visited:
                 contig = self.get_contig(kmer)
                 for km in contig:
+                    # avoid duplicated kmers in contigs. 
                     visited.add(km)
                     visited.add(twin(km))
-                self.results.append(contig2str(contig))
-        print("All results are generated, total number:{}".format(len(self.results)))
-        return self.results
+                self.nodes.append(contig2str(contig))
+        print(" All contigs are processed(group by the contiguous 1-in-1-out contigs ), \
+                New contigs number:{}".format(len(self.nodes)) )
+        return self.nodes
+
+    def simple_nodes(self):
+        self.nodes = []
+        visited = set()
+        for id,kmer in enumerate(self.count_dict):
+            if kmer not in visited:
+                self.nodes.append(kmer)
+                self.nodes.append(twin(kmer))
+                visited.add(kmer)
+                visited.add(twin(kmer))
+
 
     def build_graph(self):
         """ Build Graph with the long sequence generated from get_contigs. """
@@ -162,13 +132,13 @@ class DBG():
         heads = {}
         tails = {}
         k = self.k
-        for i,sequence in enumerate(self.results):
+        for i,sequence in enumerate(self.nodes):
             graph[i] = ([],[])
             heads[sequence[:k]] = (i,'+')
             tails[twin(sequence[-k:])] = (i,'-')
 
-        for node_id in graph:
-            sequence = self.results[node_id]
+        for i in graph:
+            sequence = self.nodes[i]
             seq_tail = sequence[-k:]
             seq_head = sequence[:k]
             for next_seq in front_seq(seq_tail):
@@ -184,61 +154,100 @@ class DBG():
         self.graph = graph
         return self.graph
     
-    def fit(self,data_dir='../data/data1',file_type='short'):
+    def fit(self,data_dir='../data/data1',file_type='short',mode="default"):
         self.load_data(data_dir,file_type)
-        self.get_contigs()
-        self.build_graph()
-        return self.show_graph()
+        if mode=="default":
+            self.compress_path()
+        elif mode == "simple":
+            self.simple_nodes()
+        else:
+            pass
+        return self.build_graph()
 
-    def get_longest_path(self):
-        pass
-
-    def generate_GFA(self,store_path=None):
+    def get_answers(self):
+        G = self.graph
         k = self.k
-        output = ""
-        print("H  VN:Z:1.0")
-        output += "H  VN:Z:1.0" + '\n'
-        for i,seq in enumerate(self.results):
-            print("S\t%d\t%s\t*"%(i,seq))
-            output += "S\t%d\t%s\t*"%(i,seq) + '\n'
-        for i in self.graph:
-            for j,o in self.graph[i][0]:
-                print("L\t%d\t+\t%d\t%s\t%dM"%(i,j,o,k-1))
-                output += "L\t%d\t+\t%d\t%s\t%dM"%(i,j,o,k-1) +'\n'
-            for j,o in self.graph[i][1]:
-                print("L\t%d\t-\t%d\t%s\t%dM"%(i,j,o,k-1))
-                output += "L\t%d\t-\t%d\t%s\t%dM"%(i,j,o,k-1) + '\n'
-        if store_path is not None:
-            with open(store_path,'w') as fout:
-                fout.write(output)
+        nodes = self.nodes
+        degree = defaultdict(int)
+        for i in G:
+            degree[i] += len(G[i][0]) + len(G[i][1])
+        candidate = sorted(degree.items(),key= lambda x : x[1])
+        done = set()
+        output = []
+        for i,seq_len in candidate:
+            if i in done:
+                continue
+            done.add(i)
+            visited = set()
+            visited.add(i)
+            ans = nodes[i]
+            terminate = False
+            while not terminate:
+                terminate = True
+                for node_id,tag in G[i][0]:
+                    if node_id not in done:
+                        #done.add(node_id)
+                        if node_id in visited:
+                            continue
+                        visited.add(node_id)
+                        terminate = False
+                        if tag == '+':
+                            ans += nodes[node_id][k-1:]
+                        else:
+                            ans += twin(nodes[node_id])[k-1:]
+                        break
+            output.append(ans)
+        print("Number of results:{}".format(len(output)))
+        # print(output)
+        return output
 
-    def show_graph(self,console_print=False,store_path=None):
-        lines = ["digraph G {", "graph [rankdir=LR, fontname=\"Courier\"];", "node [shape=record];"]
-        for i in self.graph:
-            lines.append("%s[label=\"<F> %s+ | <R> %s-\"];"%(i,i,i))
-        t = dict(('+F','-R'))
-        for i in self.graph:
-            for j in self.graph[i]:
-                o = self.graph[i][j]
-                lines.append("%s:%s -> %s:%s;"%(i,t[o[0]],j,t[o[1]]))
-        lines.append("}")
-        character_graph = '\n'.join(lines)
-        if store_path is not None:
-            with open(store_path,'w') as f:
-                f.write(character_graph)
-        if console_print:
-            print(character_graph)
-        return character_graph
+
+    # def generate_GFA(self,store_path=None):
+    #     k = self.k
+    #     output = ""
+    #     print("H  VN:Z:1.0")
+    #     output += "H  VN:Z:1.0" + '\n'
+    #     for i,seq in enumerate(self.nodes):
+    #         print("S\t%d\t%s\t*"%(i,seq))
+    #         output += "S\t%d\t%s\t*"%(i,seq) + '\n'
+    #     for i in self.graph:
+    #         for j,o in self.graph[i][0]:
+    #             print("L\t%d\t+\t%d\t%s\t%dM"%(i,j,o,k-1))
+    #             output += "L\t%d\t+\t%d\t%s\t%dM"%(i,j,o,k-1) +'\n'
+    #         for j,o in self.graph[i][1]:
+    #             print("L\t%d\t-\t%d\t%s\t%dM"%(i,j,o,k-1))
+    #             output += "L\t%d\t-\t%d\t%s\t%dM"%(i,j,o,k-1) + '\n'
+    #     if store_path is not None:
+    #         with open(store_path,'w') as fout:
+    #             fout.write(output)
+
+    # def show_graph(self,console_print=False,store_path=None):
+    #     lines = ["digraph G {", "graph [rankdir=LR, fontname=\"Courier\"];", "node [shape=record];"]
+    #     lines = []
+    #     for i in self.graph:
+    #         lines.append("%s[label=\"<F> %s+ | <R> %s-\"];"%(i,i,i))
+    #     t = dict(('+F','-R'))
+    #     for i in self.graph:
+    #         for j in self.graph[i]:
+    #             o = self.graph[i][j]
+    #             lines.append("%s:%s -> %s:%s;"%(i,t[o[0]],j,t[o[1]]))
+    #     lines.append("}")
+    #     character_graph = '\n'.join(lines)
+    #     if store_path is not None:
+    #         with open(store_path,'w') as f:
+    #             f.write(character_graph)
+    #     if console_print:
+    #         print(character_graph)
+    #     return character_graph
 
 
 
 if __name__ == "__main__":
-    # for x in fw('CCTTAG'):
-    #     print(x)
     args = parse_args()
-    dbg = DBG(k=args.k,step=args.step,limit=args.limit,mode=args.mode)
-    dbg.load_data()
-    res = dbg.get_contigs()
+    dbg = DBG(k=args.k,step=args.step,limit=args.limit)
+    dbg.fit(args.data_dir,args.file_type,args.mode)
+    res = dbg.get_answers()
+
     if args.top == 0:
         n = len(res)
     else:
@@ -248,7 +257,7 @@ if __name__ == "__main__":
         seq_len.append((i,len(seq)))
     seq_len = sorted(seq_len,key=lambda x: -x[1])
     ans = [res[x[0]] for x in seq_len[:n]]
-    print(ans)
+    # print(ans)
     with open(opj(args.result_dir ,"results100.fasta") ,'w') as fout:
         for i,seq in enumerate(ans):
             fout.write(">short_read_{}/1".format(i))
