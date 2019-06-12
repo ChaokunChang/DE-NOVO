@@ -12,12 +12,42 @@ from utils import *
 # from DNA.src.utils import *
 sys.setrecursionlimit(100000) # set the maximum depth as 1500
 
+class PairEnd:
+    def __init__(self,length,reads1,reads2,pair_dis=500):
+        self.length = length
+        self.pairs = {}
+        self.pair_dis = pair_dis
+        for i in range(len(reads1)):
+            self.pairs[reads1[i]] = twin(reads2[i])
+            self.pairs[twin(reads2[i])] = reads1[i]
+
+            self.pairs[twin(reads1[i]) ] = reads2[i]
+            self.pairs[twin(reads2[i])] = twin(reads1[i])
+    
+    def contain_pair(self,contig):
+        ans = []
+        seqset = set()
+        locmap = {}
+        c_size = len(contig)
+        for i in range(c_size - self.length+1):
+            subc = contig[i : i+self.length]
+            seqset.add(subc)
+            locmap[subc] = i
+        for read in self.pairs:
+            if read in seqset:
+                ans.append((read,locmap[read]))
+        return ans
+    
+    def get_pair(self,p1):
+        return self.pairs[p1]
+
 def graph_mining(graph, discription:dict, mode="simple"):
     candidate = sorted(discription['in_degree'].items(),key= lambda x : x[1])
     done = set()
     output = []
     ans = ""
     k = discription['k']
+    PES = discription['pair_ends']
     print("Mining graph in {} mode".format(mode))
     print("Candidate size:{}".format(len(candidate)))
     count = 0
@@ -25,10 +55,13 @@ def graph_mining(graph, discription:dict, mode="simple"):
         # for kmer in graph:
         #     graph[kmer][1] = sorted(graph[kmer][1], key=lambda x: -discription['count_dict'][x])
         for kmer,degree in candidate:
-            print(len(graph[kmer][0]))
-            print(len(graph[kmer][1]))
-            if degree == 0:
+            if len(graph[kmer][0]) == 1 and len(graph[kmer][1])==1:
+                nxt = graph[kmer][1][0]
+                bef = graph[kmer][0][0]
+                assert(len(graph[nxt][0])>1 and len(graph[bef][1])>1 )
                 count += 1
+            if degree > 2:
+                print("!!!!!!!!!!!!!!!!!!!")
             if kmer in done:
                 continue
             done.add(kmer)
@@ -36,15 +69,41 @@ def graph_mining(graph, discription:dict, mode="simple"):
             terminate = False
             while not terminate:
                 terminate = True
+                single_pairs = PES.contain_pair(kmer)
+                check_pos = []
+                for p1,loc1 in single_pairs:
+                    loc2 = (loc1 + PES.pair_dis - PES.length) - len(kmer)
+                    if loc2 >= 0:
+                        p2 = PES.get_pair(p1)
+                        assert(len(p2) == len(p1))
+                        check_pos.append((p2,loc2))
+                # print(single_pairs)
+                selection = ""
                 for nxtkmer in graph[kmer][1]:
                     if nxtkmer not in done:
-                        ans += nxtkmer[k-1:]
-                        terminate = False
-                        kmer = nxtkmer
-                        done.add(nxtkmer)
-                        break
+                        if selection == "":
+                            selection = nxtkmer
+                        else:
+                            for p2,loc2 in check_pos:
+                                loc2 += k-1
+                                if len(nxtkmer) < loc2+PES.length:
+                                    continue
+                                tp2 = nxtkmer[loc2 : loc2 + PES.length]
+                                print(tp2)
+                                print(p2)
+                                assert(tp2 == p2)
+                                if tp2 == p2:
+                                    selection = nxtkmer
+                                    print("OHOHOHOHOHOHOHOHOH")
+                                    break
+                if selection != "":
+                    terminate = False
+                    kmer = selection
+                    done.add(selection)
+                    ans += selection[k-1:]
+                
             output.append(ans)
-        print("Count degree 0 {}".format(count))
+        print("Count 1-in-1-out {}".format(count))
     else:
         pass
     return output
@@ -89,6 +148,7 @@ class DBG():
         self.graph = None
         self.in_degree = None
         self.out_degree = None
+        self.pair_ends = None
 
     def load_data(self,data_dir='../data/data1',file_type='short'):
         filenames = os.listdir(data_dir)
@@ -111,11 +171,19 @@ class DBG():
         count_dict = defaultdict(int)
         in_degree = defaultdict(int)
         out_degree = defaultdict(int)
+        cache1 = []
+        cache2 = []
         for r_id,reads in enumerate(reads_list):
             for read in reads:
                 seq = str(read.seq)
                 kmerize(seq,k,count_dict,graph,in_degree,out_degree)
                 kmerize(twin(seq),k,count_dict,graph,in_degree,out_degree)
+                if r_id == 0:
+                    cache1.append(seq)
+                else:
+                    cache2.append(seq)
+        self.pair_ends = PairEnd(len(seq),cache1,cache2)
+
         print("Size of count dict:{}".format(len(count_dict)))
         print("Number of the graph nodes:{}".format(len(graph)))
         self.graph = graph
@@ -197,7 +265,7 @@ class DBG():
 
     def get_answers(self,mode):
         discription = { 'in_degree':self.in_degree,'count_dict':self.count_dict,
-                        'out_degree':self.out_degree,'k':self.k }
+                        'out_degree':self.out_degree,'k':self.k,'pair_ends':self.pair_ends }
         output = graph_mining(self.graph,discription,mode)
         print("Number of results:{}".format(len(output)))
         # print(output)
