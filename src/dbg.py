@@ -10,64 +10,108 @@ from Bio import Seq, SeqIO, SeqRecord
 from itertools import chain
 from utils import *
 # from DNA.src.utils import *
+sys.setrecursionlimit(100000) # set the maximum depth as 1500
 
-def longest_path(graph,cur_p,visited):
+def longest_path(graph,cur_p,visited,count):
     """ 
     graph:
     cur_p: a kmer in graph
      """
-    best_ans = cur_p[-1]
+    best_ans = ""
     best_sp = ""
     for sp in graph[cur_p][1]:
         if sp not in visited:
+            # print(len(visited))
+            if count >= 3600 :
+                break
             visited.add(sp)
-            next_ans = sp[-1]+longest_path(graph,sp,visited)
+            next_ans = sp[-1]+longest_path(graph,sp,visited,count+1)            
             if len(next_ans) > len(best_ans):
                 best_ans = next_ans
-                if best_sp is not None:
-                    visited.remove(best_sp)
                 best_sp = sp
-            else:
-                visited.remove(sp)
+            visited.remove(sp)
+    if best_sp != "":
+        visited.add(best_sp)
     return best_ans
-
-
 
 def graph_mining(graph, discription:dict, mode="simple"):
     candidate = sorted(discription['in_degree'].items(),key= lambda x : x[1])
+    for kmer in graph:
+        graph[kmer][1] = sorted(graph[kmer][1], key=lambda x: -discription['count_dict'][x])
+
     done = set()
     output = []
     ans = ""
-    print("mining graph in {} mode".format(mode))
+    print("Mining graph in {} mode".format(mode))
+    # print("Graph size:{}".format(len(graph)))
     if mode == "simple" or mode == "default":
         for kmer,degree in candidate:
+            # print(degree)
             if kmer in done:
                 continue
             done.add(kmer)
             ans = kmer
             terminate = False
+            onedone = set()
+            onedone.add(kmer)
             while not terminate:
                 terminate = True
                 for nxtkmer in graph[kmer][1]:
-                    if nxtkmer not in done:
+                    if nxtkmer not in done and nxtkmer not in onedone:
                         ans += nxtkmer[-1]
                         terminate = False
                         kmer = nxtkmer
-                        done.add(nxtkmer)
+                        if degree > 0:
+                            done.add(nxtkmer)
+                        onedone.add(nxtkmer)
                         break
             output.append(ans)
-        return output
     elif mode == "longest":
         for kmer,degree in candidate:
             if kmer in done:
                 continue
             done.add(kmer)
-            ans = kmer + longest_path(graph,kmer,done)
-            output.append(ans)
+            longest = kmer
+            k = len(kmer)
+            while(len(longest)<10000):
+                tmp = longest_path(graph,longest[-k:],done,0)
+                longest = longest + tmp
+                if len(tmp) < 1:
+                    # print("break:{}".format(len(tmp)))
+                    break
+                else:
+                    print("OK:{}".format(len(tmp)))
+            print(len(longest))
+            output.append(longest)
     else :
         pass
     return output
     
+def kmerize(seq,k,count_dict, graph, in_degree, out_degree):
+    for i in range(len(seq)-k +1 -1):
+        kmer = seq[i:i+k]
+        nxtkmer = seq[i+1:i+1+k]
+        if kmer not in count_dict:
+            graph[kmer] = [[],[]] # 0 is in and 1 is out
+            out_degree[kmer] = 0
+            in_degree[kmer] = 0
+            count_dict[kmer] = 0
+        if nxtkmer not in count_dict:
+            graph[nxtkmer] = [[],[]]
+            out_degree[nxtkmer] = 0
+            in_degree[nxtkmer] = 0
+            count_dict[nxtkmer] = 0
+        
+        if nxtkmer not in graph[kmer][1]:
+            graph[kmer][1].append(nxtkmer)
+        if kmer not in graph[nxtkmer][0]:
+            graph[nxtkmer][0].append(kmer)
+
+        out_degree[kmer] += 1
+        in_degree[nxtkmer] += 1
+        
+        count_dict[kmer] += 1
+    count_dict[seq[-k:]] += 1
 
 
 class DBG():
@@ -104,45 +148,20 @@ class DBG():
         count_dict = defaultdict(int)
         in_degree = defaultdict(int)
         out_degree = defaultdict(int)
+        duplicate_count = 0
         for r_id,reads in enumerate(reads_list):
             for read in reads:
                 seq = str(read.seq)
-                for i in range(len(seq)-k +1 -1):
-                    kmer = seq[i:i+k]
-                    nxtkmer = seq[i+1:i+1+k]
-                    if count_dict[kmer] == 0:
-                        graph[kmer] = [[],[]] # 0 is in and 1 is out
-                    if count_dict[nxtkmer] == 0:
-                        graph[nxtkmer] = [[],[]]
-                    graph[kmer][1].append(nxtkmer)
-                    out_degree[kmer] += 1
-                    graph[nxtkmer][0].append(kmer)
-                    in_degree[nxtkmer] += 1
-                    count_dict[kmer] += 1
-                    count_dict[nxtkmer] += 1
-                seq = twin(seq)
-                for i in range(len(seq)-k +1 -1):
-                    kmer = seq[i:i+k]
-                    nxtkmer = seq[i+1:i+1+k]
-                    if count_dict[kmer] == 0:
-                        graph[kmer] = [[],[]] # 0 is in and 1 is out
-                    if count_dict[nxtkmer] == 0:
-                        graph[nxtkmer] = [[],[]]
-                    graph[kmer][1].append(nxtkmer)
-                    out_degree[kmer] += 1
-                    graph[nxtkmer][0].append(kmer)
-                    in_degree[nxtkmer] += 1
-                    count_dict[kmer] += 1
-                    count_dict[nxtkmer] += 1
-                count_dict[seq[-k:]] += 1
-                count_dict[seq[:k]] += 1
+                kmerize(seq,k,count_dict,graph,in_degree,out_degree)
+                kmerize(twin(seq),k,count_dict,graph,in_degree,out_degree)
 
-                # all count is 2 times
-        
+        print("duplicate_count:{}".format(duplicate_count))
         # print("The low frequency kmers (limited up to {}) will be remove from dict.".format(self.limit))
         # low_freq_kmers = [x for x in count_dict if count_dict[x] <= self.limit]
         # for x in low_freq_kmers:
         #     del count_dict[x]
+        print("Size of count dict:{}".format(len(count_dict)))
+        print("Number of the graph nodes:{}".format(len(graph)))
         self.graph = graph
         self.in_degree = in_degree
         self.out_degree = out_degree
@@ -153,31 +172,9 @@ class DBG():
         return self.get_answers(mode)
 
     def get_answers(self,mode):
-        # G = self.graph
-        # dic = self.count_dict
-        # for kmer in G:
-        #     G[kmer][1] = sorted(G[kmer][1], key=lambda x: -self.out_degree[x]) # 8276
-        # candidate = sorted(self.in_degree.items(),key= lambda x : x[1])
-        # done = set()
-        # output = []
-        # ans = ""
-        # for kmer,degree in candidate:
-        #     if kmer in done:
-        #         continue
-        #     done.add(kmer)
-        #     ans = kmer
-        #     terminate = False
-        #     while not terminate:
-        #         terminate = True
-        #         for nxtkmer in G[kmer][1]:
-        #             if nxtkmer not in done:
-        #                 ans += nxtkmer[-1]
-        #                 terminate = False
-        #                 kmer = nxtkmer
-        #                 done.add(nxtkmer)
-        #                 break
-        #     output.append(ans)
-        discription = {'in_degree':self.in_degree}
+        
+        discription = { 'in_degree':self.in_degree,'count_dict':self.count_dict,
+                        'out_degree':self.out_degree }
         output = graph_mining(self.graph,discription,mode)
         print("Number of results:{}".format(len(output)))
         # print(output)
