@@ -60,6 +60,12 @@ def graph_mining(graph, discription:dict, mode="simple"):
                 bef = graph[kmer][0][0]
                 assert(len(graph[nxt][0])>1 and len(graph[bef][1])>1 )
                 count += 1
+            if degree == 2:
+                n1 = graph[kmer][1][0]
+                n2 = graph[kmer][1][1]
+                # assert(graph[n1][0] == 1 and graph[n1][1] == 1)
+                # assert(graph[n2][0] == 1 and graph[n2][1] == 1)
+                # assert(graph[n1][1][0] == graph[n2][1][0])
             if degree > 2:
                 print("!!!!!!!!!!!!!!!!!!!")
             if kmer in done:
@@ -70,32 +76,67 @@ def graph_mining(graph, discription:dict, mode="simple"):
             while not terminate:
                 terminate = True
                 single_pairs = PES.contain_pair(kmer)
+
                 check_pos = []
                 for p1,loc1 in single_pairs:
-                    loc2 = (loc1 + PES.pair_dis - PES.length) - len(kmer)
+                    endpos = (loc1 + PES.pair_dis) - len(kmer)
+                    loc2 = endpos - PES.length
                     if loc2 >= 0:
+                        start = loc2 + k-1
+                        remain_len = PES.length
                         p2 = PES.get_pair(p1)
-                        assert(len(p2) == len(p1))
-                        check_pos.append((p2,loc2))
+                        check_pos.append((p2,start,remain_len))
+                    elif endpos >= 0:
+                        start = k-1
+                        remain_len = -loc2
+                        p2 = PES.get_pair(p1)
+                        check_pos.append((p2,k-1,remain_len))
+
                 # print(single_pairs)
                 selection = ""
-                for nxtkmer in graph[kmer][1]:
-                    if nxtkmer not in done:
-                        if selection == "":
-                            selection = nxtkmer
-                        else:
-                            for p2,loc2 in check_pos:
-                                loc2 += k-1
-                                if len(nxtkmer) < loc2+PES.length:
-                                    continue
-                                tp2 = nxtkmer[loc2 : loc2 + PES.length]
-                                print(tp2)
-                                print(p2)
-                                assert(tp2 == p2)
-                                if tp2 == p2:
-                                    selection = nxtkmer
-                                    print("OHOHOHOHOHOHOHOHOH")
-                                    break
+                directions = graph[kmer][1]
+                # assert(0==1)
+                if len(directions) == 1:
+                    if directions[0] not in done:
+                        selection = directions[0]
+                elif len(directions) > 1:
+                    for nxtkmer in directions:
+                        if nxtkmer in done:
+                            continue
+                        for p2,start,rl in check_pos:
+                            if rl < PES.length:
+                                if start+rl <= len(nxtkmer):
+                                    tp2 = nxtkmer[start:start+rl]
+                                    rl = 0
+                                    addlist = [nxtkmer]
+                                else:
+                                    rl = start + rl - len(nxtkmer)
+                                    start = k-1
+                            elif rl > 0:
+                                if start+rl <= len(nxtkmer):
+                                    tp2 = nxtkmer[start:start+rl]
+                                    addlist = [nxtkmer]
+                                else:
+                                    tmp = nxtkmer[start:]
+                                    rl = rl - (len(nxtkmer) - start)
+                                    start = k-1
+                                    nxtnxtkmers = graph[nxtkmer][1]
+                                    assert(len(nxtnxtkmers) == 1)
+                                    nxtnxtkmer = nxtnxtkmers[0]
+                                    tp2 = tmp + nxtnxtkmer[start:start+rl]
+
+                                    addlist = [nxtkmer,nxtnxtkmer]
+                                    
+                            if tp2 == p2[-rl:]:
+                                selection = "".join(addlist)
+                                for ele in addlist:
+                                    done.add(ele)
+                                break
+                        if selection != "":
+                            print(selection)
+                            break
+                    # assert(selection != "")
+
                 if selection != "":
                     terminate = False
                     kmer = selection
@@ -196,6 +237,11 @@ class DBG():
                 count += 1
         print("0 Degree:{}".format(count))
         self.graph_simplify()
+        # node_len_lst = []
+        # for node in self.graph:
+        #     node_len_lst.append(len(node))
+        # plt.hist(node_len_lst,bins=100)
+        # plt.show()
     
     def graph_simplify(self):
         old_graph = self.graph
