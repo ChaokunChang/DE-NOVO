@@ -36,17 +36,19 @@ def longest_path(graph,cur_p,visited,count):
 
 def graph_mining(graph, discription:dict, mode="simple"):
     candidate = sorted(discription['in_degree'].items(),key= lambda x : x[1])
-    for kmer in graph:
-        graph[kmer][1] = sorted(graph[kmer][1], key=lambda x: -discription['count_dict'][x])
-
     done = set()
     output = []
     ans = ""
+    k = discription['k']
     print("Mining graph in {} mode".format(mode))
-    # print("Graph size:{}".format(len(graph)))
+    print("Candidate size:{}".format(len(candidate)))
+    count = 0
     if mode == "simple" or mode == "default":
+        for kmer in graph:
+            graph[kmer][1] = sorted(graph[kmer][1], key=lambda x: -discription['count_dict'][x])
         for kmer,degree in candidate:
-            # print(degree)
+            if degree == 0:
+                count+=1
             if kmer in done:
                 continue
             done.add(kmer)
@@ -83,8 +85,35 @@ def graph_mining(graph, discription:dict, mode="simple"):
                     print("OK:{}".format(len(tmp)))
             print(len(longest))
             output.append(longest)
-    else :
+    elif mode=="compress":
+        # graph is a collection of class Node
+        nodes = discription['nodes']
+        for kmer,degree in candidate:
+            if degree == 0:
+                count += 1
+            if kmer in done:
+                continue
+            done.add(kmer)
+            ans = kmer
+            terminate = False
+            onedone = set()
+            onedone.add(kmer)
+            while not terminate:
+                terminate = True
+                for nxtkmer in graph[kmer].childs:
+                    nxtkmer = nodes[nxtkmer]
+                    if nxtkmer not in done and nxtkmer not in onedone:
+                        ans += nxtkmer[k-1:]
+                        terminate = False
+                        kmer = nxtkmer
+                        if degree > 0:
+                            done.add(nxtkmer)
+                        onedone.add(nxtkmer)
+                        break
+            output.append(ans)
+    else:
         pass
+    print("Count degree 0 {}".format(count))
     return output
     
 def kmerize(seq,k,count_dict, graph, in_degree, out_degree):
@@ -113,6 +142,7 @@ def kmerize(seq,k,count_dict, graph, in_degree, out_degree):
         count_dict[kmer] += 1
     count_dict[seq[-k:]] += 1
 
+    
 
 class DBG():
     """ The DBG Algorithm to implement the de novo problem. """
@@ -148,14 +178,11 @@ class DBG():
         count_dict = defaultdict(int)
         in_degree = defaultdict(int)
         out_degree = defaultdict(int)
-        duplicate_count = 0
         for r_id,reads in enumerate(reads_list):
             for read in reads:
                 seq = str(read.seq)
                 kmerize(seq,k,count_dict,graph,in_degree,out_degree)
                 kmerize(twin(seq),k,count_dict,graph,in_degree,out_degree)
-
-        print("duplicate_count:{}".format(duplicate_count))
         # print("The low frequency kmers (limited up to {}) will be remove from dict.".format(self.limit))
         # low_freq_kmers = [x for x in count_dict if count_dict[x] <= self.limit]
         # for x in low_freq_kmers:
@@ -166,15 +193,102 @@ class DBG():
         self.in_degree = in_degree
         self.out_degree = out_degree
         self.count_dict = count_dict
+        # count_list = self.count_dict.values()
+        # plt.hist(count_list,bins=100)
+        # plt.show()
     
+    def graph_simplify(self):
+        old_graph = self.graph
+        new_graph = {}
+        new_in = defaultdict(int)
+        new_out = defaultdict(int)
+        new_dict = defaultdict(int)
+        done = set()
+        k = self.k
+        node_num = 0
+        nodes = []
+        count = 0
+        for kmer in self.count_dict:
+            if kmer in done:
+                continue
+            count += 1
+            new_node = kmer
+            size = 0
+            node_num += 1
+            done.add(kmer)
+            cur_kmer = kmer
+            # back_ans = []
+            # for_ans = []
+            while len(old_graph[kmer][1]) == 1:
+                nxtkmer = old_graph[kmer][1][0]
+                if len(old_graph[nxtkmer][0]) == 1:
+                    done.add(nxtkmer)
+                    # for_ans += [nxtkmer]
+                    new_node += nxtkmer[-1]
+                    kmer = nxtkmer
+                    size += 1
+                else:
+                    break
+            print(size)
+            kmer = cur_kmer
+            while len(old_graph[kmer][0]) == 1:
+                befkmer = old_graph[kmer][0][0]
+                if len(old_graph[befkmer][1]) == 1:
+                    done.add(befkmer)
+                    # back_ans = [befkmer] + back_ans
+                    new_node = befkmer[0] + new_node
+                    kmer = befkmer
+                    size += 1
+                else:
+                    break
+            # ans = back_ans + [cur_kmer] + for_ans
+            # ans = contig2str(ans)
+            # if (ans != new_node):
+            #     for i in range(len(ans)):
+            #         if ans[i] != new_node[i]:
+            #             print("{},{}:{}".format(count,i,ans[i]))
+            # assert(ans == new_node)
+            # new_node = ans
+            if new_node not in nodes:
+                nodes.append(new_node)
+                new_graph[new_node] = [[],[]]
+                new_dict[new_node] = 0
+                new_out[new_node] = 0
+                new_in[new_node] = 0
+            new_dict[new_node] += size
+            # print(len(new_node))
+        graph_sz = len(new_graph)
+
+        for i in range(graph_sz):
+            for j in range(graph_sz):
+                if i == j:
+                    continue
+                node1 = nodes[i]
+                node2 = nodes[j]
+                # print("node1:",node1[-k:])
+                # print("node2:",node2[:k])
+                if node1[k-1:] == node2[:k-1]:
+                    new_graph[node1][1].append(node2)
+                    new_out[node1] += 1
+                    new_graph[node2][0].append(node1)
+                    new_in[node2] += 1
+        self.graph = new_graph
+        self.in_degree = new_in
+        self.out_degree = new_out
+        self.count_dict = new_dict
+        print("Compressed Graph size:{}".format(len(self.graph)))
+        return nodes
+
     def fit(self,data_dir='../data/data1',file_type='short',mode="simple"):
         self.load_data(data_dir,file_type)
         return self.get_answers(mode)
 
     def get_answers(self,mode):
-        
+        nodes = None
+        if mode == "compress":
+            nodes,self.graph,self.in_degree,self.out_degree = graph_compress(self.k,self.count_dict,self.graph)
         discription = { 'in_degree':self.in_degree,'count_dict':self.count_dict,
-                        'out_degree':self.out_degree }
+                        'out_degree':self.out_degree,'nodes':nodes,'k':self.k }
         output = graph_mining(self.graph,discription,mode)
         print("Number of results:{}".format(len(output)))
         # print(output)
