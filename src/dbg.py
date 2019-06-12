@@ -10,6 +10,66 @@ from Bio import Seq, SeqIO, SeqRecord
 from itertools import chain
 from utils import *
 # from DNA.src.utils import *
+
+def longest_path(graph,cur_p,visited):
+    """ 
+    graph:
+    cur_p: a kmer in graph
+     """
+    best_ans = cur_p[-1]
+    best_sp = ""
+    for sp in graph[cur_p][1]:
+        if sp not in visited:
+            visited.add(sp)
+            next_ans = sp[-1]+longest_path(graph,sp,visited)
+            if len(next_ans) > len(best_ans):
+                best_ans = next_ans
+                if best_sp is not None:
+                    visited.remove(best_sp)
+                best_sp = sp
+            else:
+                visited.remove(sp)
+    return best_ans
+
+
+
+def graph_mining(graph, discription:dict, mode="simple"):
+    candidate = sorted(discription['in_degree'].items(),key= lambda x : x[1])
+    done = set()
+    output = []
+    ans = ""
+    print("mining graph in {} mode".format(mode))
+    if mode == "simple" or mode == "default":
+        for kmer,degree in candidate:
+            if kmer in done:
+                continue
+            done.add(kmer)
+            ans = kmer
+            terminate = False
+            while not terminate:
+                terminate = True
+                for nxtkmer in graph[kmer][1]:
+                    if nxtkmer not in done:
+                        ans += nxtkmer[-1]
+                        terminate = False
+                        kmer = nxtkmer
+                        done.add(nxtkmer)
+                        break
+            output.append(ans)
+        return output
+    elif mode == "longest":
+        for kmer,degree in candidate:
+            if kmer in done:
+                continue
+            done.add(kmer)
+            ans = kmer + longest_path(graph,kmer,done)
+            output.append(ans)
+    else :
+        pass
+    return output
+    
+
+
 class DBG():
     """ The DBG Algorithm to implement the de novo problem. """
     def __init__(self,k=31,step=1,limit=1):
@@ -47,10 +107,7 @@ class DBG():
         for r_id,reads in enumerate(reads_list):
             for read in reads:
                 seq = str(read.seq)
-                if r_id == 1:
-                    seq = twin(seq)
-                # print(seq)
-                for i in range(len(seq)-k +1 -1,self.step):
+                for i in range(len(seq)-k +1 -1):
                     kmer = seq[i:i+k]
                     nxtkmer = seq[i+1:i+1+k]
                     if count_dict[kmer] == 0:
@@ -63,7 +120,6 @@ class DBG():
                     in_degree[nxtkmer] += 1
                     count_dict[kmer] += 1
                     count_dict[nxtkmer] += 1
-                
                 seq = twin(seq)
                 for i in range(len(seq)-k +1 -1):
                     kmer = seq[i:i+k]
@@ -80,6 +136,7 @@ class DBG():
                     count_dict[nxtkmer] += 1
                 count_dict[seq[-k:]] += 1
                 count_dict[seq[:k]] += 1
+
                 # all count is 2 times
         
         # print("The low frequency kmers (limited up to {}) will be remove from dict.".format(self.limit))
@@ -91,35 +148,37 @@ class DBG():
         self.out_degree = out_degree
         self.count_dict = count_dict
     
-    def fit(self,data_dir='../data/data1',file_type='short',mode="default"):
+    def fit(self,data_dir='../data/data1',file_type='short',mode="simple"):
         self.load_data(data_dir,file_type)
-        return self.get_answers()
+        return self.get_answers(mode)
 
-    def get_answers(self):
-        G = self.graph
-        dic = self.count_dict
+    def get_answers(self,mode):
+        # G = self.graph
+        # dic = self.count_dict
         # for kmer in G:
-        #     G[kmer][1] = sorted(G[kmer][1], key=lambda x: self.in_degree[x])
-        candidate = sorted(self.in_degree.items(),key= lambda x : x[1])
-        done = set()
-        output = []
-        ans = ""
-        for kmer,degree in candidate:
-            if kmer in done:
-                continue
-            done.add(kmer)
-            ans = kmer
-            terminate = False
-            while not terminate:
-                terminate = True
-                for nxtkmer in G[kmer][1]:
-                    if nxtkmer not in done:
-                        ans += nxtkmer[-1]
-                        terminate = False
-                        kmer = nxtkmer
-                        done.add(nxtkmer)
-                        break
-            output.append(ans)
+        #     G[kmer][1] = sorted(G[kmer][1], key=lambda x: -self.out_degree[x]) # 8276
+        # candidate = sorted(self.in_degree.items(),key= lambda x : x[1])
+        # done = set()
+        # output = []
+        # ans = ""
+        # for kmer,degree in candidate:
+        #     if kmer in done:
+        #         continue
+        #     done.add(kmer)
+        #     ans = kmer
+        #     terminate = False
+        #     while not terminate:
+        #         terminate = True
+        #         for nxtkmer in G[kmer][1]:
+        #             if nxtkmer not in done:
+        #                 ans += nxtkmer[-1]
+        #                 terminate = False
+        #                 kmer = nxtkmer
+        #                 done.add(nxtkmer)
+        #                 break
+        #     output.append(ans)
+        discription = {'in_degree':self.in_degree}
+        output = graph_mining(self.graph,discription,mode)
         print("Number of results:{}".format(len(output)))
         # print(output)
         return output
