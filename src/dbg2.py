@@ -43,6 +43,8 @@ class PairEnd:
 
 def graph_mining(graph, discription:dict, mode="simple"):
     candidate = sorted(discription['in_degree'].items(),key= lambda x : x[1])
+    for node, degree in candidate:
+        assert(graph[node][1] is not None)
     done = set()
     output = []
     ans = ""
@@ -60,7 +62,7 @@ def graph_mining(graph, discription:dict, mode="simple"):
                 bef = graph[kmer][0][0]
                 assert(len(graph[nxt][0])>1 and len(graph[bef][1])>1 )
                 count += 1
-            if degree == 2:
+            if len(graph[kmer][1]) == 2:
                 n1 = graph[kmer][1][0]
                 n2 = graph[kmer][1][1]
                 # assert(graph[n1][0] == 1 and graph[n1][1] == 1)
@@ -96,6 +98,7 @@ def graph_mining(graph, discription:dict, mode="simple"):
                 selection = ""
                 directions = graph[kmer][1]
                 # assert(0==1)
+                addlist = None
                 if len(directions) == 1:
                     if directions[0] not in done:
                         selection = directions[0]
@@ -104,34 +107,49 @@ def graph_mining(graph, discription:dict, mode="simple"):
                         if nxtkmer in done:
                             continue
                         for p2,start,rl in check_pos:
-                            if rl < PES.length:
-                                if start+rl <= len(nxtkmer):
-                                    tp2 = nxtkmer[start:start+rl]
-                                    rl = 0
-                                    addlist = [nxtkmer]
-                                else:
-                                    rl = start + rl - len(nxtkmer)
-                                    start = k-1
-                            elif rl > 0:
-                                if start+rl <= len(nxtkmer):
-                                    tp2 = nxtkmer[start:start+rl]
-                                    addlist = [nxtkmer]
-                                else:
-                                    tmp = nxtkmer[start:]
-                                    rl = rl - (len(nxtkmer) - start)
-                                    start = k-1
-                                    nxtnxtkmers = graph[nxtkmer][1]
-                                    assert(len(nxtnxtkmers) == 1)
-                                    nxtnxtkmer = nxtnxtkmers[0]
-                                    tp2 = tmp + nxtnxtkmer[start:start+rl]
+                            if start+rl <= len(nxtkmer):
+                                tp2 = nxtkmer[start:start+rl]
+                                addlist = [nxtkmer]
+                            else:
+                                tmp = nxtkmer[start:]
+                                rl = rl - (len(nxtkmer) - start)
+                                start = k-1
+                                nxtnxtkmers = graph[nxtkmer][1]
+                                assert(len(nxtnxtkmers) == 1)
+                                nxtnxtkmer = nxtnxtkmers[0]
+                                tp2 = tmp + nxtnxtkmer[start:start+rl]
 
-                                    addlist = [nxtkmer,nxtnxtkmer]
+                                addlist = [nxtkmer,nxtnxtkmer]
+                            # if rl < PES.length:
+                            #     if start+rl <= len(nxtkmer):
+                            #         tp2 = nxtkmer[start:start+rl]
+                            #         rl = 0
+                            #         addlist = [nxtkmer]
+                            #     else:
+                            #         rl = start + rl - len(nxtkmer)
+                            #         start = k-1
+                            # elif rl > 0:
+                            #     if start+rl <= len(nxtkmer):
+                            #         tp2 = nxtkmer[start:start+rl]
+                            #         addlist = [nxtkmer]
+                            #     else:
+                            #         tmp = nxtkmer[start:]
+                            #         rl = rl - (len(nxtkmer) - start)
+                            #         start = k-1
+                            #         nxtnxtkmers = graph[nxtkmer][1]
+                            #         assert(len(nxtnxtkmers) == 1)
+                            #         nxtnxtkmer = nxtnxtkmers[0]
+                            #         tp2 = tmp + nxtnxtkmer[start:start+rl]
+
+                            #         addlist = [nxtkmer,nxtnxtkmer]
                                     
                             if tp2 == p2[-rl:]:
                                 selection = "".join(addlist)
                                 for ele in addlist:
                                     done.add(ele)
                                 break
+                            else:
+                                addlist = None
                         if selection != "":
                             print(selection)
                             break
@@ -139,7 +157,10 @@ def graph_mining(graph, discription:dict, mode="simple"):
 
                 if selection != "":
                     terminate = False
-                    kmer = selection
+                    if addlist is not None:
+                        kmer = addlist[-1]
+                    else:
+                        kmer = selection
                     done.add(selection)
                     ans += selection[k-1:]
                 
@@ -173,9 +194,9 @@ def kmerize(seq,k,count_dict, graph, in_degree, out_degree):
         in_degree[nxtkmer] += 1
         
         count_dict[kmer] += 1
+    
     count_dict[seq[-k:]] += 1
 
-    
 
 class DBG():
     """ The DBG Algorithm to implement the de novo problem. """
@@ -204,6 +225,12 @@ class DBG():
         print("Load the sequences in {} done".format(data_dir))
         print("Building counting dict for them...")
         self.build_graph(rlist)
+        self.graph_simplify()
+        # node_len_lst = []
+        # for node in self.graph:
+        #     node_len_lst.append(len(node))
+        # plt.hist(node_len_lst,bins=100)
+        # plt.show()
 
     def build_graph(self,reads_list):
         assert(isinstance(reads_list,list))
@@ -235,13 +262,7 @@ class DBG():
         for kmer in self.in_degree:
             if self.in_degree[kmer] == 0:
                 count += 1
-        print("0 Degree:{}".format(count))
-        self.graph_simplify()
-        # node_len_lst = []
-        # for node in self.graph:
-        #     node_len_lst.append(len(node))
-        # plt.hist(node_len_lst,bins=100)
-        # plt.show()
+        print("Before Compress, 0 Degree count:{}".format(count))
     
     def graph_simplify(self):
         old_graph = self.graph
