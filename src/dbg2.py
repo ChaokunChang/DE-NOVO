@@ -261,48 +261,8 @@ def compressed_graph_mining(graph, discription):
             checked_len += len(graph[cur_check][1][choice]) - (k-1)
             graph[cur_check][1] = [ graph[cur_check][1][choice] ]
             cur_check = nxt_check
-        
-        # af_pairs = []
-        # new_af = None
-        # for af in graph[node][1]:
-        #     pair = PES.contain_pairs(af)
-        #     af_pairs.append(pair)
-        #     for p1,loc1 in single_pairs:
-        #         p2 = PES.get_pair(p1)
-        #         for tp2,loc2 in pair:
-        #             if tp2 == p2:
-        #                 gap_dis = (len(node)-loc1 + loc2+PES.length+1 - (k-1) )
-        #                 if gap_dis == PES.pair_dis:
-        #                     new_af = [af]
-        #                     break
-        #         if new_af is not None:
-        #             break
-        #     if new_af is not None:
-        #         break
-        # if new_af is not None:
-        #     print(new_af)
-        #     graph[node][1] = new_af
 
-        # bef_pairs = []
-        # new_bef = None
-        # for bef in graph[node][0]:
-        #     pair = PES.contain_pairs(bef)
-        #     bef_pairs.append(pair)
-        #     for p1,loc1 in single_pairs:
-        #         p2 = PES.get_pair(p1)
-        #         for tp2,loc2 in pair:
-        #             if tp2 == p2:
-        #                 gap_dis = (loc1+PES.length+1 + (len(bef)-loc2) - (k-1) )
-        #                 if gap_dis == PES.pair_dis:
-        #                     new_bef = [bef]
-        #                     break
-        #         if new_bef is not None:
-        #             break
-        # if new_bef is not None:
-        #     break
-        # graph[node][0] = new_bef
-
-    for node in start_nodes[2:]:
+    for node in start_nodes[0:]:
         visited.add(node)
         path = longest_path(graph,node,visited,0)
         for p in path:
@@ -310,44 +270,6 @@ def compressed_graph_mining(graph, discription):
         ans = nodes_combine(path,k)
         print(ans)
         results.append(ans)
-
-    # for node in start_nodes:
-    #     visited = set()
-    #     ans = node
-    #     selection = node
-    #     candidates = graph[selection][1]
-    #     while(len(candidates) > 0):
-    #         selection = ""
-    #         for contig in candidates:
-    #             if contig not in visited:
-    #                 if len(contig) > len(contig):
-    #                     selection = contig
-    #         if selection != "":
-    #             ans += selection[k-1:]
-    #             visited.add(selection)
-    #             candidates = graph[selection][1]
-    #         else:
-    #             results.append(ans)
-    #             break
-    # for node in end_nodes:
-    #     visited = set()
-    #     ans = node
-    #     selection = node
-    #     candidates = graph[selection][0]
-    #     while(len(candidates) > 0):
-    #         selection = ""
-    #         for contig in candidates:
-    #             if contig not in visited:
-    #                 if len(contig) > len(contig):
-    #                     selection = contig
-    #         if selection != "":
-    #             ans = selection[:-k+1] + ans
-    #             visited.add(selection)
-    #             candidates = graph[selection][0]
-    #         else:
-    #             results.append(ans)
-    #             break
-    
     return results
 
 
