@@ -24,7 +24,7 @@ class PairEnd:
             self.pairs[twin(reads1[i]) ] = reads2[i]
             self.pairs[twin(reads2[i])] = twin(reads1[i])
     
-    def contain_pair(self,contig):
+    def contain_pairs(self,contig):
         ans = []
         seqset = set()
         locmap = {}
@@ -77,7 +77,7 @@ def graph_mining(graph, discription:dict, mode="simple"):
             terminate = False
             while not terminate:
                 terminate = True
-                single_pairs = PES.contain_pair(kmer)
+                single_pairs = PES.contain_pairs(kmer)
 
                 check_pos = []
                 for p1,loc1 in single_pairs:
@@ -118,30 +118,7 @@ def graph_mining(graph, discription:dict, mode="simple"):
                                 assert(len(nxtnxtkmers) == 1)
                                 nxtnxtkmer = nxtnxtkmers[0]
                                 tp2 = tmp + nxtnxtkmer[start:start+rl]
-
                                 addlist = [nxtkmer,nxtnxtkmer]
-                            # if rl < PES.length:
-                            #     if start+rl <= len(nxtkmer):
-                            #         tp2 = nxtkmer[start:start+rl]
-                            #         rl = 0
-                            #         addlist = [nxtkmer]
-                            #     else:
-                            #         rl = start + rl - len(nxtkmer)
-                            #         start = k-1
-                            # elif rl > 0:
-                            #     if start+rl <= len(nxtkmer):
-                            #         tp2 = nxtkmer[start:start+rl]
-                            #         addlist = [nxtkmer]
-                            #     else:
-                            #         tmp = nxtkmer[start:]
-                            #         rl = rl - (len(nxtkmer) - start)
-                            #         start = k-1
-                            #         nxtnxtkmers = graph[nxtkmer][1]
-                            #         assert(len(nxtnxtkmers) == 1)
-                            #         nxtnxtkmer = nxtnxtkmers[0]
-                            #         tp2 = tmp + nxtnxtkmer[start:start+rl]
-
-                            #         addlist = [nxtkmer,nxtnxtkmer]
                                     
                             if tp2 == p2[-rl:]:
                                 selection = "".join(addlist)
@@ -169,7 +146,211 @@ def graph_mining(graph, discription:dict, mode="simple"):
     else:
         pass
     return output
+
+def longest_path(graph, root,visited:set,depth):
+    if len(graph[root][1])==0:
+        return [root]
+    best = [root]
+    cur = [root]
+    # print("cur depth:{}".format(depth))
+    for child in graph[root][1]:
+        if child not in visited:
+            visited.add(child)
+            cur = [root] + longest_path(graph,child,visited,depth+1)
+            visited.remove(child)
+            if len("".join(cur)) > len("".join(best)) :
+                best = cur
+    if len(graph[root][1])>0 and best==[root]:
+        # circle occur caused terminate
+        print("!!!!")
+    return best
+
+def nodes_combine(nodes,k):
+    assert(len(nodes) > 0)
+    return nodes[0] + "".join(n[k-1:] for n in nodes[1:])
+
+def choose_path(cur_path,cur_node,graph,k,target_pairs,pair_length):
+    count = 0
+    for p,loc in target_pairs:
+        if len(cur_path)>=loc:
+            if p == cur_path[loc-pair_length:loc]:
+                return cur_path
+            else:
+                target_pairs.remove( (p,loc) )
+            count += 1
+    if len(target_pairs) == 0:
+        return ""
+    else:
+        for node in graph[cur_node][1]:
+            next_path = cur_path + node[k-1:]
+            ans = choose_path( next_path, node, graph, k, target_pairs, pair_length)
+            return ans
+
+def compressed_graph_mining(graph, discription):
+    k = discription['k']
+    in_degree = discription['in_degree']
+    out_degree = discription['out_degree']
+    PES = discription['pair_ends']
+    count_dict = discription['count_dict']
+    results = []
+    start_nodes = []
+    end_nodes = []
+    single_nodes = []
+    split_nodes = []
+    merge_nodes = []
+    hub_nodes = []
+    total_length = 0
+    for node in graph:
+        if len(graph[node][0]) == 0 : # in degree is 0
+            start_nodes.append(node)
+        if len(graph[node][1]) == 0 : # out degree is 0
+            end_nodes.append(node) # both in-out degree is 0
+        if len(graph[node][0]) == 0 and len(graph[node][1]) == 0:
+            single_nodes.append(node)
+        if len(graph[node][1]) > 1:
+            assert(len(graph[node][1]) == 2)
+            split_nodes.append(node)
+            if len(graph[node][0]) > 1:
+                assert(len(graph[node][0]) == 2)
+                hub_nodes.append(node)
+        if len(graph[node][0]) > 1:
+            assert(len(graph[node][0]) == 2)
+            merge_nodes.append(node)
+        total_length += len(node)
+    print("All asserts passed.")
+    print("Split nodes number:{}".format(len(split_nodes)))
+    print("Merge nodes number:{}".format(len(merge_nodes)))
+    print("Hub nodes number:{}".format(len(hub_nodes)))
+    print("Start nodes number:{}".format(len(start_nodes)))
+    print("End nodes number:{}".format(len(end_nodes)))
+    print("Sigle nodes number:{}".format(len(single_nodes)))
+    print("The Start node and End nodes maybe same(single node case),Let's remove them.")
+    for node in single_nodes:
+        print(len(node))
+        results.append(node)
+        total_length -= len(node)
+        start_nodes.remove(node)
+        end_nodes.remove(node)
+    print("Length:{}".format(total_length))
+    assert(len(start_nodes) == 4)
+    visited = set()
+    for node in split_nodes:
+        single_pairs = PES.contain_pairs(node)
+        target_pairs = []
+        for pair,loc in single_pairs:
+            target_pairs.append(( PES.get_pair(pair),loc+PES.pair_dis ))
+        right_path = choose_path(node,node,graph,k,target_pairs,PES.length)
+        if right_path != "":
+            print(right_path)
+        else:
+            print("DONE")
+        checked_len = len(node) - (k-1)
+        cur_check = node
+        nxt_check = node
+        while(checked_len < len(right_path)- (k-1)):
+            choice = 0
+            if len(graph[cur_check][1]) == 0:
+                break
+            # nxt_check = graph[cur_check][1][0]
+            for i in range( len(graph[cur_check][1]) ):
+                cur = graph[cur_check][1][i]
+                if cur == right_path[checked_len:checked_len+len(cur)]:
+                    choice = i
+                    nxt_check = cur
+                    break
+            checked_len += len(graph[cur_check][1][choice]) - (k-1)
+            graph[cur_check][1] = [ graph[cur_check][1][choice] ]
+            cur_check = nxt_check
+        
+        # af_pairs = []
+        # new_af = None
+        # for af in graph[node][1]:
+        #     pair = PES.contain_pairs(af)
+        #     af_pairs.append(pair)
+        #     for p1,loc1 in single_pairs:
+        #         p2 = PES.get_pair(p1)
+        #         for tp2,loc2 in pair:
+        #             if tp2 == p2:
+        #                 gap_dis = (len(node)-loc1 + loc2+PES.length+1 - (k-1) )
+        #                 if gap_dis == PES.pair_dis:
+        #                     new_af = [af]
+        #                     break
+        #         if new_af is not None:
+        #             break
+        #     if new_af is not None:
+        #         break
+        # if new_af is not None:
+        #     print(new_af)
+        #     graph[node][1] = new_af
+
+        # bef_pairs = []
+        # new_bef = None
+        # for bef in graph[node][0]:
+        #     pair = PES.contain_pairs(bef)
+        #     bef_pairs.append(pair)
+        #     for p1,loc1 in single_pairs:
+        #         p2 = PES.get_pair(p1)
+        #         for tp2,loc2 in pair:
+        #             if tp2 == p2:
+        #                 gap_dis = (loc1+PES.length+1 + (len(bef)-loc2) - (k-1) )
+        #                 if gap_dis == PES.pair_dis:
+        #                     new_bef = [bef]
+        #                     break
+        #         if new_bef is not None:
+        #             break
+        # if new_bef is not None:
+        #     break
+        # graph[node][0] = new_bef
+
+    for node in start_nodes[2:]:
+        visited.add(node)
+        path = longest_path(graph,node,visited,0)
+        for p in path:
+            visited.add(p)
+        ans = nodes_combine(path,k)
+        print(ans)
+        results.append(ans)
+
+    # for node in start_nodes:
+    #     visited = set()
+    #     ans = node
+    #     selection = node
+    #     candidates = graph[selection][1]
+    #     while(len(candidates) > 0):
+    #         selection = ""
+    #         for contig in candidates:
+    #             if contig not in visited:
+    #                 if len(contig) > len(contig):
+    #                     selection = contig
+    #         if selection != "":
+    #             ans += selection[k-1:]
+    #             visited.add(selection)
+    #             candidates = graph[selection][1]
+    #         else:
+    #             results.append(ans)
+    #             break
+    # for node in end_nodes:
+    #     visited = set()
+    #     ans = node
+    #     selection = node
+    #     candidates = graph[selection][0]
+    #     while(len(candidates) > 0):
+    #         selection = ""
+    #         for contig in candidates:
+    #             if contig not in visited:
+    #                 if len(contig) > len(contig):
+    #                     selection = contig
+    #         if selection != "":
+    #             ans = selection[:-k+1] + ans
+    #             visited.add(selection)
+    #             candidates = graph[selection][0]
+    #         else:
+    #             results.append(ans)
+    #             break
     
+    return results
+
+
 def kmerize(seq,k,count_dict, graph, in_degree, out_degree):
     for i in range(len(seq)-k +1 -1):
         kmer = seq[i:i+k]
@@ -200,7 +381,7 @@ def kmerize(seq,k,count_dict, graph, in_degree, out_degree):
 
 class DBG():
     """ The DBG Algorithm to implement the de novo problem. """
-    def __init__(self,k=31,step=1,limit=1):
+    def __init__(self,k=29,step=1,limit=1):
         print("Initializing...")
         self.k = k
         self.step = step
@@ -219,6 +400,7 @@ class DBG():
             file_prefix = fname.split('.')[0].split('_')[0]
             if file_prefix != file_type:
                 continue
+            print("Get data from {}".format(fname))
             file_path = opj(data_dir,fname)
             reads = SeqIO.parse(file_path,'fasta')
             rlist.append(reads)
@@ -333,7 +515,8 @@ class DBG():
     def get_answers(self,mode):
         discription = { 'in_degree':self.in_degree,'count_dict':self.count_dict,
                         'out_degree':self.out_degree,'k':self.k,'pair_ends':self.pair_ends }
-        output = graph_mining(self.graph,discription,mode)
+        # output = graph_mining(self.graph,discription,mode)
+        output = compressed_graph_mining(self.graph,discription)
         print("Number of results:{}".format(len(output)))
         # print(output)
         return output

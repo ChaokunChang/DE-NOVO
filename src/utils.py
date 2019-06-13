@@ -15,9 +15,9 @@ def parse_args():
     model_settings = parser.add_argument_group('model seetting')
     model_settings.add_argument('--model', choices=['DBG'], default='DBG',
                                 help='choose the algorithm to use')
-    model_settings.add_argument('--mode',default="default")
+    model_settings.add_argument('--mode',default="compress")
     DBG_settings = parser.add_argument_group('DBG model settings')
-    DBG_settings.add_argument('--k', type=int, default=50,
+    DBG_settings.add_argument('--k', type=int, default=29,
                                 help='the kmers-k')
     DBG_settings.add_argument('--step', type=int, default=1,
                                 help='step between adjacent kmer.')
