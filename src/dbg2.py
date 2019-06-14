@@ -187,6 +187,7 @@ def choose_path(cur_path,cur_node,graph,k,target_pairs,pair_length):
             return ans
 
 def compressed_graph_mining(graph, discription):
+    # using pair ends info
     k = discription['k']
     in_degree = discription['in_degree']
     out_degree = discription['out_degree']
@@ -234,6 +235,14 @@ def compressed_graph_mining(graph, discription):
     print("Length:{}".format(total_length))
     assert(len(start_nodes) == 4)
     visited = set()
+    for node in start_nodes[0:2]:
+        visited.add(node)
+        path = longest_path(graph,node,visited,0)
+        for p in path:
+            visited.add(p)
+        ans = nodes_combine(path,k)
+        print(ans)
+        results.append(ans)
     for node in split_nodes:
         single_pairs = PES.contain_pairs(node)
         target_pairs = []
@@ -262,7 +271,7 @@ def compressed_graph_mining(graph, discription):
             graph[cur_check][1] = [ graph[cur_check][1][choice] ]
             cur_check = nxt_check
 
-    for node in start_nodes[0:]:
+    for node in start_nodes[2:]:
         visited.add(node)
         path = longest_path(graph,node,visited,0)
         for p in path:
@@ -459,7 +468,7 @@ if __name__ == "__main__":
     seq_len = sorted(seq_len,key=lambda x: -x[1])
     ans = [res[x[0]] for x in seq_len[:n]]
     # print(ans)
-    with open(opj(args.result_dir ,"results100.fasta") ,'w') as fout:
+    with open(opj(args.result_dir, args.result_name) ,'w') as fout:
         for i,seq in enumerate(ans):
             fout.write(">short_read_{}/1".format(i))
             fout.write("\n")

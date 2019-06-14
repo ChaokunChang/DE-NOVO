@@ -32,7 +32,9 @@ def parse_args():
     path_settings.add_argument('--file_type', choices=['short','long'], default='short',
                                help='short or long file.')
     path_settings.add_argument('--result_dir', default='./',
-                               help='the data source dir.')
+                               help='the result dir.')
+    path_settings.add_argument('--result_name', default="results100.fasta",
+                               help='the result file name.')
     return parser.parse_args()
     
 
