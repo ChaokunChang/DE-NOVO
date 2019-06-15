@@ -29,7 +29,7 @@ def parse_args():
     path_settings = parser.add_argument_group('dir settings')
     path_settings.add_argument('--data_dir', default='../data/data1',
                                help='the data source dir.')
-    path_settings.add_argument('--file_type', choices=['short','long'], default='short',
+    path_settings.add_argument('--file_type', choices=['short','long','all'], default='short',
                                help='short or long file.')
     path_settings.add_argument('--result_dir', default='./',
                                help='the result dir.')

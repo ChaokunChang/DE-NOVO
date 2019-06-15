@@ -41,111 +41,6 @@ class PairEnd:
     def get_pair(self,p1):
         return self.pairs[p1]
 
-def graph_mining(graph, discription:dict, mode="simple"):
-    candidate = sorted(discription['in_degree'].items(),key= lambda x : x[1])
-    for node, degree in candidate:
-        assert(graph[node][1] is not None)
-    done = set()
-    output = []
-    ans = ""
-    k = discription['k']
-    PES = discription['pair_ends']
-    print("Mining graph in {} mode".format(mode))
-    print("Candidate size:{}".format(len(candidate)))
-    count = 0
-    if mode == "simple" or mode == "default" or mode=="compress":
-        # for kmer in graph:
-        #     graph[kmer][1] = sorted(graph[kmer][1], key=lambda x: -discription['count_dict'][x])
-        for kmer,degree in candidate:
-            if len(graph[kmer][0]) == 1 and len(graph[kmer][1])==1:
-                nxt = graph[kmer][1][0]
-                bef = graph[kmer][0][0]
-                assert(len(graph[nxt][0])>1 and len(graph[bef][1])>1 )
-                count += 1
-            if len(graph[kmer][1]) == 2:
-                n1 = graph[kmer][1][0]
-                n2 = graph[kmer][1][1]
-                # assert(graph[n1][0] == 1 and graph[n1][1] == 1)
-                # assert(graph[n2][0] == 1 and graph[n2][1] == 1)
-                # assert(graph[n1][1][0] == graph[n2][1][0])
-            if degree > 2:
-                print("!!!!!!!!!!!!!!!!!!!")
-            if kmer in done:
-                continue
-            done.add(kmer)
-            ans = kmer
-            terminate = False
-            while not terminate:
-                terminate = True
-                single_pairs = PES.contain_pairs(kmer)
-
-                check_pos = []
-                for p1,loc1 in single_pairs:
-                    endpos = (loc1 + PES.pair_dis) - len(kmer)
-                    loc2 = endpos - PES.length
-                    if loc2 >= 0:
-                        start = loc2 + k-1
-                        remain_len = PES.length
-                        p2 = PES.get_pair(p1)
-                        check_pos.append((p2,start,remain_len))
-                    elif endpos >= 0:
-                        start = k-1
-                        remain_len = -loc2
-                        p2 = PES.get_pair(p1)
-                        check_pos.append((p2,k-1,remain_len))
-
-                # print(single_pairs)
-                selection = ""
-                directions = graph[kmer][1]
-                # assert(0==1)
-                addlist = None
-                if len(directions) == 1:
-                    if directions[0] not in done:
-                        selection = directions[0]
-                elif len(directions) > 1:
-                    for nxtkmer in directions:
-                        if nxtkmer in done:
-                            continue
-                        for p2,start,rl in check_pos:
-                            if start+rl <= len(nxtkmer):
-                                tp2 = nxtkmer[start:start+rl]
-                                addlist = [nxtkmer]
-                            else:
-                                tmp = nxtkmer[start:]
-                                rl = rl - (len(nxtkmer) - start)
-                                start = k-1
-                                nxtnxtkmers = graph[nxtkmer][1]
-                                assert(len(nxtnxtkmers) == 1)
-                                nxtnxtkmer = nxtnxtkmers[0]
-                                tp2 = tmp + nxtnxtkmer[start:start+rl]
-                                addlist = [nxtkmer,nxtnxtkmer]
-                                    
-                            if tp2 == p2[-rl:]:
-                                selection = "".join(addlist)
-                                for ele in addlist:
-                                    done.add(ele)
-                                break
-                            else:
-                                addlist = None
-                        if selection != "":
-                            print(selection)
-                            break
-                    # assert(selection != "")
-
-                if selection != "":
-                    terminate = False
-                    if addlist is not None:
-                        kmer = addlist[-1]
-                    else:
-                        kmer = selection
-                    done.add(selection)
-                    ans += selection[k-1:]
-                
-            output.append(ans)
-        print("Count 1-in-1-out {}".format(count))
-    else:
-        pass
-    return output
 
 def longest_path(graph, root,visited:set,depth):
     if len(graph[root][1])==0:
@@ -209,13 +104,13 @@ def compressed_graph_mining(graph, discription):
         if len(graph[node][0]) == 0 and len(graph[node][1]) == 0:
             single_nodes.append(node)
         if len(graph[node][1]) > 1:
-            assert(len(graph[node][1]) == 2)
+            # assert(len(graph[node][1]) == 2)
             split_nodes.append(node)
             if len(graph[node][0]) > 1:
-                assert(len(graph[node][0]) == 2)
+                # assert(len(graph[node][0]) == 2)
                 hub_nodes.append(node)
         if len(graph[node][0]) > 1:
-            assert(len(graph[node][0]) == 2)
+            # assert(len(graph[node][0]) == 2)
             merge_nodes.append(node)
         total_length += len(node)
     print("All asserts passed.")
@@ -233,16 +128,16 @@ def compressed_graph_mining(graph, discription):
         start_nodes.remove(node)
         end_nodes.remove(node)
     print("Length:{}".format(total_length))
-    assert(len(start_nodes) == 4)
+    # assert(len(start_nodes) == 4)
     visited = set()
-    for node in start_nodes[0:2]:
-        visited.add(node)
-        path = longest_path(graph,node,visited,0)
-        for p in path:
-            visited.add(p)
-        ans = nodes_combine(path,k)
-        print(ans)
-        results.append(ans)
+    # for node in start_nodes[0:2]:
+    #     visited.add(node)
+    #     path = longest_path(graph,node,visited,0)
+    #     for p in path:
+    #         visited.add(p)
+    #     ans = nodes_combine(path,k)
+    #     print(ans)
+    #     results.append(ans)
     for node in split_nodes:
         single_pairs = PES.contain_pairs(node)
         target_pairs = []
@@ -271,7 +166,7 @@ def compressed_graph_mining(graph, discription):
             graph[cur_check][1] = [ graph[cur_check][1][choice] ]
             cur_check = nxt_check
 
-    for node in start_nodes[2:]:
+    for node in start_nodes[0:]:
         visited.add(node)
         path = longest_path(graph,node,visited,0)
         for p in path:
@@ -279,6 +174,7 @@ def compressed_graph_mining(graph, discription):
         ans = nodes_combine(path,k)
         print(ans)
         results.append(ans)
+    
     return results
 
 
@@ -329,7 +225,7 @@ class DBG():
         rlist = []
         for fid,fname in enumerate(filenames):
             file_prefix = fname.split('.')[0].split('_')[0]
-            if file_prefix != file_type:
+            if file_type!="all" and file_prefix != file_type:
                 continue
             print("Get data from {}".format(fname))
             file_path = opj(data_dir,fname)
@@ -376,6 +272,7 @@ class DBG():
             if self.in_degree[kmer] == 0:
                 count += 1
         print("Before Compress, 0 Degree count:{}".format(count))
+        # self.show_graph('./uncompressed_graph.dot')
     
     def graph_simplify(self):
         old_graph = self.graph
@@ -387,7 +284,7 @@ class DBG():
         k = self.k
         node_num = 0
         nodes = []
-        for kmer in self.count_dict:
+        for kmer in old_graph:
             if kmer in done:
                 continue
             size = 0
@@ -398,6 +295,8 @@ class DBG():
             while len(old_graph[kmer][1]) == 1:
                 nxtkmer = old_graph[kmer][1][0]
                 if len(old_graph[nxtkmer][0]) == 1:
+                    if nxtkmer in done:
+                        break # it will be ok without this judgement
                     done.add(nxtkmer)
                     new_node += nxtkmer[-1]
                     kmer = nxtkmer
@@ -408,6 +307,8 @@ class DBG():
             while len(old_graph[kmer][0]) == 1:
                 befkmer = old_graph[kmer][0][0]
                 if len(old_graph[befkmer][1]) == 1:
+                    if befkmer in done:
+                        break
                     done.add(befkmer)
                     new_node = befkmer[0] + new_node
                     kmer = befkmer
@@ -438,6 +339,30 @@ class DBG():
         self.out_degree = new_out
         self.count_dict = new_dict
         print("Compressed Graph size:{}".format(len(self.graph)))
+        # self.show_graph('./graph1.dot','./id2node1.txt')
+
+    def show_graph(self,dotpath,idtable=None):
+        node2id = {}
+        id2node = {}
+        G = self.graph
+        for id,node in enumerate(G):
+            node2id[node] = id
+            id2node[id] = node
+        lines = ["digraph G {", "graph [rankdir=LR, fontname=\"Courier\"];", "node [shape=record];"]
+        for i,node in enumerate(G):
+            lines.append("{}[label=\"{}({})\"];".format(i,i,len(node)) )
+        for id,node in enumerate(G):
+            for child in G[node][1]:
+                child_id = node2id[child]
+                lines.append("{} -> {} ;".format(id,child_id))
+        lines.append("}")
+        with open(dotpath,'w') as f:
+            f.write('\n'.join(lines))
+        if idtable is not None:
+            with open(idtable,'w') as f:
+                for id in id2node:
+                    f.write("{} : {} \n".format(id,id2node[id]))
+        return '\n'.join(lines)
 
     def fit(self,data_dir='../data/data1',file_type='short',mode="simple"):
         self.load_data(data_dir,file_type)
@@ -446,7 +371,6 @@ class DBG():
     def get_answers(self,mode):
         discription = { 'in_degree':self.in_degree,'count_dict':self.count_dict,
                         'out_degree':self.out_degree,'k':self.k,'pair_ends':self.pair_ends }
-        # output = graph_mining(self.graph,discription,mode)
         output = compressed_graph_mining(self.graph,discription)
         print("Number of results:{}".format(len(output)))
         # print(output)
@@ -457,7 +381,7 @@ if __name__ == "__main__":
     args = parse_args()
     dbg = DBG(k=args.k,step=args.step,limit=args.limit)
     res = dbg.fit(args.data_dir,args.file_type,args.mode)
-
+    dbg.show_graph('./graph.dot','./id2node.txt')
     if args.top == 0:
         n = len(res)
     else:
