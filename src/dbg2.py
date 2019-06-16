@@ -240,13 +240,13 @@ def compressed_graph_mining(graph, discription,use_pairend=True):
                 graph[cur_check][1] = [ graph[cur_check][1][choice] ]
                 cur_check = nxt_check
 
-        for node in start_nodes[0:]:
+        for i,node in enumerate(start_nodes[0:]):
             visited.add(node)
             path = longest_path(graph,node,visited,0)
             for p in path:
                 visited.add(p)
             ans = nodes_combine(path,k)
-            # print(ans)
+            print("get and answer from star_node{}".format(i))
             results.append(ans)
     else:
         for node in start_nodes:
