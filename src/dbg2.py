@@ -82,7 +82,20 @@ def choose_path(cur_path,cur_node,graph,k,target_pairs,pair_length):
             ans = choose_path( next_path, node, graph, k, target_pairs, pair_length)
             return ans
 
-def compressed_graph_mining(graph, discription):
+def likily_nodes(couple):
+    assert isinstance(couple,list)
+    assert (len(couple)==2)
+    n1 = couple[0]
+    n2 = couple[1]
+    if len(n1) == len(n2):
+        length = len(n1)
+        same_count = sum( [ n1[i]==n2[i] for i in range(length) ] )
+        if same_count/length > 0.9:
+            return True
+    return False
+
+
+def compressed_graph_mining(graph, discription,use_pairend=False):
     # using pair ends info
     k = discription['k']
     in_degree = discription['in_degree']
@@ -134,47 +147,86 @@ def compressed_graph_mining(graph, discription):
     # assert(len(start_nodes) == 4)
     
     visited = set()
-    # for node in start_nodes[0:2]:
-    #     visited.add(node)
-    #     path = longest_path(graph,node,visited,0)
-    #     for p in path:
-    #         visited.add(p)
-    #     ans = nodes_combine(path,k)
-    #     print(ans)
-    #     results.append(ans)
-    for node in split_nodes:
-        single_pairs = PES.contain_pairs(node)
-        target_pairs = []
-        for pair,loc in single_pairs:
-            target_pairs.append(( PES.get_pair(pair),loc+PES.pair_dis ))
-        right_path = choose_path(node,node,graph,k,target_pairs,PES.length)
-        checked_len = len(node) - (k-1)
-        cur_check = node
-        nxt_check = node
-        while(checked_len < len(right_path)- (k-1)):
-            choice = 0
-            if len(graph[cur_check][1]) == 0:
-                break
-            # nxt_check = graph[cur_check][1][0]
-            for i in range( len(graph[cur_check][1]) ):
-                cur = graph[cur_check][1][i]
-                if cur == right_path[checked_len:checked_len+len(cur)]:
-                    choice = i
-                    nxt_check = cur
+    if use_pairend:
+        # for node in start_nodes[0:2]:
+        #     visited.add(node)
+        #     path = longest_path(graph,node,visited,0)
+        #     for p in path:
+        #         visited.add(p)
+        #     ans = nodes_combine(path,k)
+        #     print(ans)
+        #     results.append(ans)
+        for node in split_nodes:
+            single_pairs = PES.contain_pairs(node)
+            target_pairs = []
+            for pair,loc in single_pairs:
+                target_pairs.append(( PES.get_pair(pair),loc+PES.pair_dis ))
+            right_path = choose_path(node,node,graph,k,target_pairs,PES.length)
+            checked_len = len(node) - (k-1)
+            cur_check = node
+            nxt_check = node
+            while(checked_len < len(right_path)- (k-1)):
+                choice = 0
+                if len(graph[cur_check][1]) == 0:
                     break
-            checked_len += len(graph[cur_check][1][choice]) - (k-1)
-            graph[cur_check][1] = [ graph[cur_check][1][choice] ]
-            cur_check = nxt_check
+                # nxt_check = graph[cur_check][1][0]
+                for i in range( len(graph[cur_check][1]) ):
+                    cur = graph[cur_check][1][i]
+                    if cur == right_path[checked_len:checked_len+len(cur)]:
+                        choice = i
+                        nxt_check = cur
+                        break
+                checked_len += len(graph[cur_check][1][choice]) - (k-1)
+                graph[cur_check][1] = [ graph[cur_check][1][choice] ]
+                cur_check = nxt_check
 
-    for node in start_nodes[0:]:
-        visited.add(node)
-        path = longest_path(graph,node,visited,0)
-        for p in path:
-            visited.add(p)
-        ans = nodes_combine(path,k)
-        # print(ans)
-        results.append(ans)
-    
+        for node in start_nodes[0:]:
+            visited.add(node)
+            path = longest_path(graph,node,visited,0)
+            for p in path:
+                visited.add(p)
+            ans = nodes_combine(path,k)
+            # print(ans)
+            results.append(ans)
+    else:
+        for node in start_nodes:
+            if len(node) == 4118:
+                print(len(node))
+            cur_node = node
+            ans = cur_node
+            while len(graph[cur_node][1]) >= 0:
+                childs = graph[cur_node][1]
+                nxt_node = ""
+                if len(childs) == 1:
+                    if childs[0] not in visited:
+                        nxt_node = childs[0]
+                elif len(childs) == 0:
+                    break
+                else:
+                    if likily_nodes(childs):
+                        for child in childs:
+                            if child not in visited:
+                                nxt_node = child
+                                break
+                    else:
+                        max_len = 0
+                        for child in childs:
+                            if child not in visited:
+                                if has_kmer(graph[child][1],cur_node):
+                                    ans += child[k-1:]
+                                    ans += cur_node[k-1:]
+                                    # print(ans)
+                                    visited.add(child)
+                                    continue
+                                if len(child) > max_len:
+                                    nxt_node = child
+                if nxt_node == "":
+                    break
+                else:
+                    ans += nxt_node[k-1:]
+                    visited.add(nxt_node)
+                    cur_node = nxt_node
+            results.append(ans)
     return results
 
 
@@ -423,7 +475,6 @@ if __name__ == "__main__":
     ans = [res[x[0]] for x in seq_len[:n]]
     # print(ans)
     result_name = args.result_name
-    result_name = "result_t.fasta"
     with open(opj(args.result_dir, result_name) ,'w') as fout:
         for i,seq in enumerate(ans):
             fout.write(">short_read_{}/1".format(i))
