@@ -57,7 +57,8 @@ def longest_path(graph, root,visited:set,depth):
                 best = cur
     if len(graph[root][1])>0 and best==[root]:
         # circle occur caused terminate
-        print("!!!!")
+        # print("!!!!")
+        pass
     return best
 
 def nodes_combine(nodes,k):
@@ -99,8 +100,10 @@ def compressed_graph_mining(graph, discription):
     for node in graph:
         if len(graph[node][0]) == 0 : # in degree is 0
             start_nodes.append(node)
+            assert in_degree[node] == 0, in_degree[node]
         if len(graph[node][1]) == 0 : # out degree is 0
             end_nodes.append(node) # both in-out degree is 0
+            assert out_degree[node] == 0, out_degree[node]
         if len(graph[node][0]) == 0 and len(graph[node][1]) == 0:
             single_nodes.append(node)
         if len(graph[node][1]) > 1:
@@ -129,6 +132,7 @@ def compressed_graph_mining(graph, discription):
         end_nodes.remove(node)
     print("Length:{}".format(total_length))
     # assert(len(start_nodes) == 4)
+    
     visited = set()
     # for node in start_nodes[0:2]:
     #     visited.add(node)
@@ -144,10 +148,6 @@ def compressed_graph_mining(graph, discription):
         for pair,loc in single_pairs:
             target_pairs.append(( PES.get_pair(pair),loc+PES.pair_dis ))
         right_path = choose_path(node,node,graph,k,target_pairs,PES.length)
-        if right_path != "":
-            print(right_path)
-        else:
-            print("DONE")
         checked_len = len(node) - (k-1)
         cur_check = node
         nxt_check = node
@@ -172,7 +172,7 @@ def compressed_graph_mining(graph, discription):
         for p in path:
             visited.add(p)
         ans = nodes_combine(path,k)
-        print(ans)
+        # print(ans)
         results.append(ans)
     
     return results
@@ -205,6 +205,18 @@ def kmerize(seq,k,count_dict, graph, in_degree, out_degree):
     
     count_dict[seq[-k:]] += 1
 
+def has_kmer(kmerlist,kmer):
+    for km in kmerlist:
+        if km == kmer:
+            return True
+    return False
+
+def little_check(G):
+    for node in G:
+        for nxtnode in G[node][1]:
+            assert( has_kmer(G[nxtnode][0],node) )
+        for befnode in G[node][0]:
+            assert( has_kmer(G[befnode][1],node) )
 
 class DBG():
     """ The DBG Algorithm to implement the de novo problem. """
@@ -233,13 +245,7 @@ class DBG():
             rlist.append(reads)
         print("Load the sequences in {} done".format(data_dir))
         print("Building counting dict for them...")
-        self.build_graph(rlist)
-        self.graph_simplify()
-        # node_len_lst = []
-        # for node in self.graph:
-        #     node_len_lst.append(len(node))
-        # plt.hist(node_len_lst,bins=100)
-        # plt.show()
+        return rlist
 
     def build_graph(self,reads_list):
         assert(isinstance(reads_list,list))
@@ -255,6 +261,8 @@ class DBG():
                 seq = str(read.seq)
                 kmerize(seq,k,count_dict,graph,in_degree,out_degree)
                 kmerize(twin(seq),k,count_dict,graph,in_degree,out_degree)
+                # kmerize(reverse(seq),k,count_dict,graph,in_degree,out_degree)
+                # kmerize(reverse(twin(seq) ),k,count_dict,graph,in_degree,out_degree)
                 if r_id == 0:
                     cache1.append(seq)
                 else:
@@ -272,7 +280,6 @@ class DBG():
             if self.in_degree[kmer] == 0:
                 count += 1
         print("Before Compress, 0 Degree count:{}".format(count))
-        # self.show_graph('./uncompressed_graph.dot')
     
     def graph_simplify(self):
         old_graph = self.graph
@@ -290,19 +297,9 @@ class DBG():
             size = 0
             node_num += 1
             new_node = kmer
-            done.add(kmer)
             cur_kmer = kmer
-            while len(old_graph[kmer][1]) == 1:
-                nxtkmer = old_graph[kmer][1][0]
-                if len(old_graph[nxtkmer][0]) == 1:
-                    if nxtkmer in done:
-                        break # it will be ok without this judgement
-                    done.add(nxtkmer)
-                    new_node += nxtkmer[-1]
-                    kmer = nxtkmer
-                    size += 1
-                else:
-                    break
+            done.add(kmer)
+
             kmer = cur_kmer
             while len(old_graph[kmer][0]) == 1:
                 befkmer = old_graph[kmer][0][0]
@@ -315,6 +312,20 @@ class DBG():
                     size += 1
                 else:
                     break
+
+            kmer = cur_kmer
+            while len(old_graph[kmer][1]) == 1:
+                nxtkmer = old_graph[kmer][1][0]
+                if len(old_graph[nxtkmer][0]) == 1:
+                    if nxtkmer in done:
+                        break # it will be ok without this judgement
+                    done.add(nxtkmer)
+                    new_node += nxtkmer[-1]
+                    kmer = nxtkmer
+                    size += 1
+                else:
+                    break
+                    
             if new_node not in nodes:
                 nodes.append(new_node)
                 new_graph[new_node] = [[],[]]
@@ -322,39 +333,49 @@ class DBG():
                 new_out[new_node] = 0
                 new_in[new_node] = 0
             new_dict[new_node] += size
-
+        
+        print("Node Num:{}".format(node_num))
         for i in range(node_num):
-            for j in range(node_num):
-                if i == j:
-                    continue
-                node1 = nodes[i]
+            node1 = nodes[i]
+            for j in range(i+1,node_num):
                 node2 = nodes[j]
                 if node1[-k+1:] == node2[:k-1]:
                     new_graph[node1][1].append(node2)
                     new_out[node1] += 1
                     new_graph[node2][0].append(node1)
                     new_in[node2] += 1
+                if node2[-k+1:] == node1[:k-1]:
+                    new_graph[node2][1].append(node1)
+                    new_out[node2] += 1
+                    new_graph[node1][0].append(node2)
+                    new_in[node1] += 1
+        little_check(new_graph)
         self.graph = new_graph
         self.in_degree = new_in
         self.out_degree = new_out
         self.count_dict = new_dict
         print("Compressed Graph size:{}".format(len(self.graph)))
-        # self.show_graph('./graph1.dot','./id2node1.txt')
 
     def show_graph(self,dotpath,idtable=None):
         node2id = {}
         id2node = {}
         G = self.graph
+        g_size = len(G)
         for id,node in enumerate(G):
             node2id[node] = id
             id2node[id] = node
         lines = ["digraph G {", "graph [rankdir=LR, fontname=\"Courier\"];", "node [shape=record];"]
-        for i,node in enumerate(G):
-            lines.append("{}[label=\"{}({})\"];".format(i,i,len(node)) )
-        for id,node in enumerate(G):
+        for id in range(g_size):
+            node = id2node[id]
+            lines.append("{}[label=\"{}({})\"];".format(id,id,len(node)) )
+        for id in range(g_size):
+            node = id2node[id]
             for child in G[node][1]:
                 child_id = node2id[child]
                 lines.append("{} -> {} ;".format(id,child_id))
+            # for child in G[node][0]:
+            #     child_id = node2id[child]
+            #     lines.append("{} -> {} ;".format(child_id,id))
         lines.append("}")
         with open(dotpath,'w') as f:
             f.write('\n'.join(lines))
@@ -364,13 +385,21 @@ class DBG():
                     f.write("{} : {} \n".format(id,id2node[id]))
         return '\n'.join(lines)
 
-    def fit(self,data_dir='../data/data1',file_type='short',mode="simple"):
-        self.load_data(data_dir,file_type)
-        return self.get_answers(mode)
+    def fit(self,data_dir='../data/data1',file_type='short'):
+        rlist = self.load_data(data_dir,file_type)
+        self.build_graph(rlist)
+        self.graph_simplify()
+        # node_len_lst = []
+        # for node in self.graph:
+        #     node_len_lst.append(len(node))
+        # plt.hist(node_len_lst,bins=100)
+        # plt.show()        
 
-    def get_answers(self,mode):
+    def get_answers(self,mode='simple',graph_path=None,table_path=None):
         discription = { 'in_degree':self.in_degree,'count_dict':self.count_dict,
                         'out_degree':self.out_degree,'k':self.k,'pair_ends':self.pair_ends }
+        if (graph_path is not None) :
+            self.show_graph(graph_path,table_path)
         output = compressed_graph_mining(self.graph,discription)
         print("Number of results:{}".format(len(output)))
         # print(output)
@@ -380,8 +409,9 @@ class DBG():
 if __name__ == "__main__":
     args = parse_args()
     dbg = DBG(k=args.k,step=args.step,limit=args.limit)
-    res = dbg.fit(args.data_dir,args.file_type,args.mode)
-    dbg.show_graph('./graph.dot','./id2node.txt')
+    dbg.fit(args.data_dir,args.file_type)
+    res = dbg.get_answers(  mode=args.mode,
+                            graph_path='./graph_2.dot',table_path='./id2node_2.txt')
     if args.top == 0:
         n = len(res)
     else:
@@ -392,7 +422,9 @@ if __name__ == "__main__":
     seq_len = sorted(seq_len,key=lambda x: -x[1])
     ans = [res[x[0]] for x in seq_len[:n]]
     # print(ans)
-    with open(opj(args.result_dir, args.result_name) ,'w') as fout:
+    result_name = args.result_name
+    result_name = "result_t.fasta"
+    with open(opj(args.result_dir, result_name) ,'w') as fout:
         for i,seq in enumerate(ans):
             fout.write(">short_read_{}/1".format(i))
             fout.write("\n")
