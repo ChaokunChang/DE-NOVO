@@ -92,8 +92,67 @@ def likily_nodes(couple):
         same_count = sum( [ n1[i]==n2[i] for i in range(length) ] )
         if same_count/length > 0.9:
             return True
+    else:
+        if len(n1) > len(n2):
+            tmp = n2
+            n2 = n1
+            n1 = n2
+        i = 0
+        j = 0
+        same_count = 0
+        length = len(n1)
+        while i<len(n1) and j < len(n2):
+            if n1[i] == n2[j]:
+                same_count += 1
+                i += 1
+                j += 1
+            else:
+                j += 1
+        if same_count/length > 0.9:
+            return True
     return False
 
+def bouble(graph,couple):
+    if is_end(graph,couple[0]) or is_end(graph,couple[0]):
+        return False
+    elif graph[couple[0]][1][0] != graph[couple[1]][1][0]:
+        return False
+    elif not is_2merge(graph,graph[couple[0]][1][0]):
+        return False
+    else:
+        return likily_nodes(couple)
+
+def tips(graph,couple):
+    if is_end(graph,couple[0]) or is_end(graph,couple[0]):
+        s_len = min(len(couple[0]),len(couple[1]))
+        s0 = couple[0][:s_len+1]
+        s1 = couple[1][:s_len+1]
+        return bouble(graph,[s0,s1])
+    return False
+
+def is_signle(graph,node):
+    return (len(graph[node][0]) == 0 and len(graph[node][1]) == 0)
+
+def is_start(graph,node):
+    return (len(graph[node][0]) == 0)
+
+def is_end(graph,node):
+    return (len(graph[node][1]) == 0)
+
+def is_2split(graph,node):
+    return (len(graph[node][1]) == 2)
+
+def is_2merge(graph,node):
+    return (len(graph[node][0]) == 2)
+
+def is_2hub(graph,node):
+    return is_2split(graph,node) and is_2merge(graph,node)
+
+# def is_nsplit(graph,node):
+#     return len(graph[node][1])
+
+# def is_nmerge(graph,node):
+#     return len(graph[node][0])
 
 def compressed_graph_mining(graph, discription,use_pairend=False):
     # using pair ends info
@@ -138,7 +197,7 @@ def compressed_graph_mining(graph, discription,use_pairend=False):
     print("Sigle nodes number:{}".format(len(single_nodes)))
     print("The Start node and End nodes maybe same(single node case),Let's remove them.")
     for node in single_nodes:
-        print(len(node))
+        # print(len(node))
         results.append(node)
         total_length -= len(node)
         start_nodes.remove(node)
@@ -190,11 +249,9 @@ def compressed_graph_mining(graph, discription,use_pairend=False):
             results.append(ans)
     else:
         for node in start_nodes:
-            if len(node) == 4118:
-                print(len(node))
             cur_node = node
             ans = cur_node
-            while len(graph[cur_node][1]) >= 0:
+            while len(graph[cur_node][1]) > 0:
                 childs = graph[cur_node][1]
                 nxt_node = ""
                 if len(childs) == 1:
@@ -283,6 +340,7 @@ class DBG():
         self.in_degree = None
         self.out_degree = None
         self.pair_ends = None
+        self.avg_coverage = 0
 
     def load_data(self,data_dir='../data/data1',file_type='short'):
         filenames = os.listdir(data_dir)
@@ -346,11 +404,11 @@ class DBG():
         for kmer in old_graph:
             if kmer in done:
                 continue
-            size = 0
             node_num += 1
             new_node = kmer
             cur_kmer = kmer
             done.add(kmer)
+            size = self.count_dict[kmer]
 
             kmer = cur_kmer
             while len(old_graph[kmer][0]) == 1:
@@ -359,9 +417,10 @@ class DBG():
                     if befkmer in done:
                         break
                     done.add(befkmer)
-                    new_node = befkmer[0] + new_node
+                    new_node = "".join(befkmer[:-k+1]) + new_node
+                    # new_node = befkmer
                     kmer = befkmer
-                    size += 1
+                    size += self.count_dict[kmer]
                 else:
                     break
 
@@ -372,9 +431,9 @@ class DBG():
                     if nxtkmer in done:
                         break # it will be ok without this judgement
                     done.add(nxtkmer)
-                    new_node += nxtkmer[-1]
+                    new_node = new_node + "".join(nxtkmer[k-1:] )
                     kmer = nxtkmer
-                    size += 1
+                    size += self.count_dict[kmer]
                 else:
                     break
                     
@@ -384,11 +443,13 @@ class DBG():
                 new_dict[new_node] = 0
                 new_out[new_node] = 0
                 new_in[new_node] = 0
-            new_dict[new_node] += size
+            new_dict[new_node] += size/(len(new_node) - k + 1)
         
+        total_coverage = 0
         print("Node Num:{}".format(node_num))
         for i in range(node_num):
             node1 = nodes[i]
+            total_coverage += new_dict[node1]
             for j in range(i+1,node_num):
                 node2 = nodes[j]
                 if node1[-k+1:] == node2[:k-1]:
@@ -401,12 +462,46 @@ class DBG():
                     new_out[node2] += 1
                     new_graph[node1][0].append(node2)
                     new_in[node1] += 1
+        
+        self.avg_coverage = total_coverage/len(new_dict)
         little_check(new_graph)
         self.graph = new_graph
         self.in_degree = new_in
         self.out_degree = new_out
         self.count_dict = new_dict
         print("Compressed Graph size:{}".format(len(self.graph)))
+
+    def problem_handling(self):
+        graph = self.graph
+        start_nodes = []
+        for node in graph:
+            if is_start(graph,node):
+                start_nodes.append(node)
+        visited = set()
+        for node in self.count_dict:
+            if (node in visited) or (node not in graph):
+                continue
+            cur_node = node
+            visited.add(cur_node)
+            while( len(graph[cur_node][1]) > 0 ):
+                childs = graph[cur_node][1]
+                if len(childs) == 2:
+                    if tips(graph,childs) or bouble(graph,childs):
+                        if self.count_dict[childs[0]] < self.count_dict[childs[1]]:
+                            remove_id = 0
+                        else :
+                            remove_id = 1
+                        graph.pop(childs[remove_id])
+                        graph[cur_node][1] = [childs[1-remove_id]]
+                        for grand_child in graph[childs[1-remove_id]][1]:
+                            graph[grand_child][0] = graph[cur_node][1]
+                            cur_node = grand_child
+                    else:
+                        cur_node = childs[0]
+                else:
+                    break
+                visited.add(cur_node)
+        print("Re processed Graph size:{}".format(len(graph)))
 
     def show_graph(self,dotpath,idtable=None):
         node2id = {}
@@ -440,6 +535,8 @@ class DBG():
     def fit(self,data_dir='../data/data1',file_type='short'):
         rlist = self.load_data(data_dir,file_type)
         self.build_graph(rlist)
+        self.graph_simplify()
+        self.problem_handling()
         self.graph_simplify()
         # node_len_lst = []
         # for node in self.graph:
