@@ -111,9 +111,10 @@ def likily_nodes(couple):
         if same_count/length > 0.9:
             return True
     return False
+        
 
 def bouble(graph,couple):
-    if is_end(graph,couple[0]) or is_end(graph,couple[0]):
+    if is_end(graph,couple[0]) or is_end(graph,couple[1] ):
         return False
     elif graph[couple[0]][1][0] != graph[couple[1]][1][0]:
         return False
@@ -154,7 +155,7 @@ def is_2hub(graph,node):
 # def is_nmerge(graph,node):
 #     return len(graph[node][0])
 
-def compressed_graph_mining(graph, discription,use_pairend=False):
+def compressed_graph_mining(graph, discription,use_pairend=True):
     # using pair ends info
     k = discription['k']
     in_degree = discription['in_degree']
@@ -224,7 +225,7 @@ def compressed_graph_mining(graph, discription,use_pairend=False):
             checked_len = len(node) - (k-1)
             cur_check = node
             nxt_check = node
-            while(checked_len < len(right_path)- (k-1)):
+            while right_path is not None and (checked_len < len(right_path)- (k-1)):
                 choice = 0
                 if len(graph[cur_check][1]) == 0:
                     break
@@ -260,7 +261,7 @@ def compressed_graph_mining(graph, discription,use_pairend=False):
                 elif len(childs) == 0:
                     break
                 else:
-                    if likily_nodes(childs):
+                    if len(childs)==2 and likily_nodes(childs):
                         for child in childs:
                             if child not in visited:
                                 nxt_node = child
@@ -357,7 +358,7 @@ class DBG():
         print("Building counting dict for them...")
         return rlist
 
-    def build_graph(self,reads_list):
+    def build_graph(self,reads_list,freq_limit=0):
         assert(isinstance(reads_list,list))
         graph={}
         k = self.k
@@ -377,6 +378,32 @@ class DBG():
                     cache1.append(seq)
                 else:
                     cache2.append(seq)
+        if freq_limit > 1:
+            new_dict = {}
+            new_graph = {}
+            new_in_degree = {}
+            new_out_degree = {}
+            for kmer in count_dict:
+                if count_dict[kmer] >= freq_limit:
+                    new_dict[kmer] = count_dict[kmer]
+            visited = set()
+            for kmer in new_dict:
+                new_graph[kmer] = [[],[]]
+                new_in_degree[kmer] = 0
+                new_out_degree[kmer] = 0
+                for node in front_seq(kmer):
+                    if node in new_dict:
+                        new_graph[kmer][1].append(node)
+                        new_out_degree[kmer] += 1
+                for node in back_seq(kmer):
+                    if node in new_dict:
+                        new_graph[kmer][0].append(node)
+                        new_in_degree[kmer] += 1
+            count_dict = new_dict
+            graph = new_graph
+            in_degree = new_in_degree
+            out_degree = new_out_degree
+            
         self.pair_ends = PairEnd(len(seq),cache1,cache2)
 
         print("Size of count dict:{}".format(len(count_dict)))
@@ -532,12 +559,12 @@ class DBG():
                     f.write("{} : {} \n".format(id,id2node[id]))
         return '\n'.join(lines)
 
-    def fit(self,data_dir='../data/data1',file_type='short'):
+    def fit(self,data_dir='../data/data1',file_type='short',freq_limit=0):
         rlist = self.load_data(data_dir,file_type)
-        self.build_graph(rlist)
+        self.build_graph(rlist,freq_limit)
         self.graph_simplify()
-        self.problem_handling()
-        self.graph_simplify()
+        # self.problem_handling()
+        # self.graph_simplify()
         # node_len_lst = []
         # for node in self.graph:
         #     node_len_lst.append(len(node))
@@ -558,7 +585,7 @@ class DBG():
 if __name__ == "__main__":
     args = parse_args()
     dbg = DBG(k=args.k,step=args.step,limit=args.limit)
-    dbg.fit(args.data_dir,args.file_type)
+    dbg.fit(args.data_dir,args.file_type,args.limit)
     res = dbg.get_answers(  mode=args.mode,
                             graph_path='./graph_2.dot',table_path='./id2node_2.txt')
     if args.top == 0:

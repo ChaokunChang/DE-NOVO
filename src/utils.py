@@ -23,7 +23,7 @@ def parse_args():
                               help='the kmers-k')
     DBG_settings.add_argument('--step', type=int, default=1,
                               help='step between adjacent kmer.')
-    DBG_settings.add_argument('--limit', type=int, default=1,
+    DBG_settings.add_argument('--limit', type=int, default=0,
                               help='min num of the words in count dict.')
     DBG_settings.add_argument('--top', type=int, default=0,
                               help='min num of the words in count dict.')
