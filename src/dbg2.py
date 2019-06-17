@@ -161,7 +161,7 @@ def is_2hub(graph,node):
 # def is_nmerge(graph,node):
 #     return len(graph[node][0])
 
-def compressed_graph_mining(graph, discription,use_pairend=True):
+def compressed_graph_mining(graph, discription,mode=2):
     # using pair ends info
     k = discription['k']
     in_degree = discription['in_degree']
@@ -212,8 +212,9 @@ def compressed_graph_mining(graph, discription,use_pairend=True):
     print("Length:{}".format(total_length))
     # assert(len(start_nodes) == 4)
     
-    visited = set()
-    if use_pairend:
+    if mode==0:
+        #### using pair end
+        visited = set()
         # for node in start_nodes[0:2]:
         #     visited.add(node)
         #     path = longest_path(graph,node,visited,0)
@@ -255,7 +256,9 @@ def compressed_graph_mining(graph, discription,use_pairend=True):
             ans = nodes_combine(path,k)
             print("get and answer from star_node{}".format(i))
             results.append(ans)
-    else:
+    elif mode == 1:
+        ##### not using pairend, just simple search, considering the circle between two nodes
+        visited = set()
         for node in start_nodes:
             cur_node = node
             ans = cur_node
@@ -290,6 +293,44 @@ def compressed_graph_mining(graph, discription,use_pairend=True):
                 else:
                     ans += nxt_node[k-1:]
                     visited.add(nxt_node)
+                    cur_node = nxt_node
+            results.append(ans)
+    else:
+        ####### delete edge only, keep node  alive.
+        visited = set()
+        for node in start_nodes:
+            cur_node = node
+            ans = cur_node
+            while len(graph[cur_node][1]) > 0:
+                childs = graph[cur_node][1]
+                nxt_node = ""
+                if len(childs) == 1:
+                    nxt_node = childs[0]
+                elif len(childs) == 0:
+                    break
+                else:
+                    if len(childs)==2 and likily_nodes(childs):
+                        for child in childs:
+                            if child not in visited:
+                                nxt_node = child
+                                break
+                    else:
+                        max_len = 0
+                        for child in childs:
+                            if has_kmer(graph[child][1],cur_node):
+                                ans += child[k-1:]
+                                ans += cur_node[k-1:]
+                                # print(ans)
+                                graph[child][1].remove(cur_node)
+                                graph[cur_node][1].remove(child)
+                                continue
+                            if len(child) > max_len:
+                                nxt_node = child
+                if nxt_node == "":
+                    break
+                else:
+                    ans += nxt_node[k-1:]
+                    graph[cur_node][1].remove(nxt_node)
                     cur_node = nxt_node
             results.append(ans)
     return results
