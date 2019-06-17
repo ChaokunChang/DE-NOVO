@@ -42,7 +42,7 @@ class PairEnd:
         return self.pairs[p1]
 
 
-def longest_path(graph, root,visited:set,depth):
+def longest_path(graph, root,visited,depth,cached):
     if len(graph[root][1])==0:
         return [root]
     best = [root]
@@ -51,7 +51,12 @@ def longest_path(graph, root,visited:set,depth):
     for child in graph[root][1]:
         if child not in visited:
             visited.add(child)
-            cur = [root] + longest_path(graph,child,visited,depth+1)
+            if child in cached:
+                cur = [root] + cached[child]
+            else:
+                tmp = longest_path(graph,child,visited,depth+1,cached)
+                cur = [root] + tmp
+                cached[child] = tmp
             visited.remove(child)
             if len("".join(cur)) > len("".join(best)) :
                 best = cur
@@ -242,7 +247,8 @@ def compressed_graph_mining(graph, discription,use_pairend=True):
 
         for i,node in enumerate(start_nodes[0:]):
             visited.add(node)
-            path = longest_path(graph,node,visited,0)
+            cached = {}
+            path = longest_path(graph,node,visited,0,cached)
             for p in path:
                 visited.add(p)
             ans = nodes_combine(path,k)
