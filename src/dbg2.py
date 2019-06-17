@@ -133,7 +133,8 @@ def tips(graph,couple):
         s_len = min(len(couple[0]),len(couple[1]))
         s0 = couple[0][:s_len+1]
         s1 = couple[1][:s_len+1]
-        return bouble(graph,[s0,s1])
+        couple = [s0,s1]
+        return likily_nodes(couple)
     return False
 
 def is_signle(graph,node):
@@ -524,11 +525,18 @@ class DBG():
                             remove_id = 0
                         else :
                             remove_id = 1
-                        graph.pop(childs[remove_id])
-                        graph[cur_node][1] = [childs[1-remove_id]]
-                        for grand_child in graph[childs[1-remove_id]][1]:
-                            graph[grand_child][0] = graph[cur_node][1]
-                            cur_node = grand_child
+                        
+                        removed_node = childs[remove_id]
+                        for grand_father in graph[removed_node][0]:
+                            graph[grand_father][1].remove(removed_node)
+                        for grand_child in graph[removed_node][1]:
+                            graph[grand_child][0].remove(removed_node)
+                        graph.pop(removed_node)
+
+                        # graph[cur_node][1] = [childs[1-remove_id]]
+                        # for grand_child in graph[childs[1-remove_id]][1]:
+                        #     graph[grand_child][0] = graph[cur_node][1]
+                        #     cur_node = grand_child
                     else:
                         cur_node = childs[0]
                 else:
@@ -569,8 +577,8 @@ class DBG():
         rlist = self.load_data(data_dir,file_type)
         self.build_graph(rlist,freq_limit)
         self.graph_simplify()
-        # self.problem_handling()
-        # self.graph_simplify()
+        self.problem_handling()
+        self.graph_simplify()
         # node_len_lst = []
         # for node in self.graph:
         #     node_len_lst.append(len(node))
