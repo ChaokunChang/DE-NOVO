@@ -161,7 +161,7 @@ def is_2hub(graph,node):
 # def is_nmerge(graph,node):
 #     return len(graph[node][0])
 
-def compressed_graph_mining(graph, discription,mode=2):
+def compressed_graph_mining(graph, discription,mode=0):
     # using pair ends info
     k = discription['k']
     in_degree = discription['in_degree']
