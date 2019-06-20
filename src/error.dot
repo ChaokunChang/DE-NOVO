@@ -1,0 +1,21 @@
+digraph G {
+graph [rankdir=LR, fontname="Courier"];
+node [shape=record];
+0[label="0(234)"];
+1[label="1(444)"];
+2[label="2(57)"];
+7[label="2_bubble(57)"];
+3[label="3(104)"];
+4[label="4(1636)"];
+5[label="5_tip(37)"];
+6[label="6(38)"];
+8[label="8(3967)"];
+
+0 -> 1;
+1 -> 2;
+1 -> 7 -> 3;
+2 -> 3;
+8 -> 4 -> 5;
+4 -> 6;
+
+}

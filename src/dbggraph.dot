@@ -1,0 +1,12 @@
+digraph G {
+graph [rankdir=LR, fontname="Courier"];
+node [shape=record];
+0[label="k=3"];
+1[label="ATT"];
+2[label="TTC"];
+3[label="TCA"];
+4[label="TTA"];
+5[label="TAT"];
+1 -> 2 -> 3;
+1 -> 4 -> 5 -> 1;
+}
